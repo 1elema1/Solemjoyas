@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle, Image } from 'lucide-react';
 import { useStore, Product, Variant } from '../context/StoreContext';
+import { ImageUpload } from './ImageUpload';
 
 const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
 
@@ -299,22 +300,125 @@ function VariantBuilder({
   );
 }
 
+// ── Carousel Manager ───────────────────────────────────────────────────────────
+function CarouselManager() {
+  const { carouselImages, updateCarouselImages } = useStore();
+  const [tempImages, setTempImages] = useState(carouselImages);
+  const [saved, setSaved] = useState(false);
+
+  const addImage = (url: string) => {
+    if (url.trim()) {
+      setTempImages([...tempImages, url]);
+    }
+  };
+
+  const removeImage = (idx: number) => {
+    setTempImages(tempImages.filter((_, i) => i !== idx));
+  };
+
+  const save = () => {
+    updateCarouselImages(tempImages);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div>
+      <h3
+        style={{
+          fontFamily: '"Cormorant Garamond","Georgia",serif',
+          fontSize: '1.6rem',
+          color: '#1a1a1a',
+          fontWeight: 300,
+          marginBottom: '16px',
+        }}
+      >
+        Carrusel de Inicio
+      </h3>
+      <p style={{ color: '#888', fontSize: '0.82rem', marginBottom: '20px' }}>
+        Gestiona las imágenes que se mostrarán en el carrusel de la página principal.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {tempImages.map((img, idx) => (
+          <div key={idx} className="relative">
+            <div
+              className="overflow-hidden"
+              style={{
+                aspectRatio: '16/9',
+                border: '1px solid rgba(0,0,0,0.1)',
+              }}
+            >
+              <img src={img} alt={`Carousel ${idx + 1}`} className="w-full h-full object-cover" />
+            </div>
+            <button
+              onClick={() => removeImage(idx)}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '28px',
+                height: '28px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+              }}
+              className="hover:bg-black transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <ImageUpload
+        value=""
+        onChange={addImage}
+        label="Agregar nueva imagen al carrusel"
+      />
+
+      <button
+        onClick={save}
+        style={{
+          backgroundColor: saved ? '#6B8F71' : '#1a1a1a',
+          color: 'white',
+          fontSize: '0.68rem',
+          letterSpacing: '0.15em',
+          padding: '12px 24px',
+          border: 'none',
+          cursor: 'pointer',
+          marginTop: '20px',
+          transition: 'background-color 0.3s',
+        }}
+        className="uppercase"
+      >
+        {saved ? '✓ Guardado' : 'Guardar carrusel'}
+      </button>
+    </div>
+  );
+}
+
 // ── Main admin panel ───────────────────────────────────────────────────────────
 export function AdminPanel() {
   const { products, addProduct, setCurrentView } = useStore();
-  const [activeTab, setActiveTab] = useState<'list' | 'add'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'add' | 'carousel'>('list');
   const [filterCat, setFilterCat] = useState<string | null>(null);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  const emptyForm = { name: '', price: '', category: 'Anillos', image: '', description: '', variants: DEFAULT_VARIANTS['Anillos'].map(l => ({ label: l, stock: 5 })) as Variant[] };
+  const emptyForm = { name: '', price: '', category: 'Anillos', image: '', description: '', variants: [] as Variant[] };
   const [form, setForm] = useState(emptyForm);
 
   const handleCategoryChange = (cat: string) => {
     setForm(f => ({
       ...f,
       category: cat,
-      variants: DEFAULT_VARIANTS[cat]?.map(l => ({ label: l, stock: 5 })) ?? [{ label: 'Única', stock: 10 }],
     }));
   };
 
@@ -327,11 +431,16 @@ export function AdminPanel() {
     }
     const price = parseFloat(form.price);
     if (isNaN(price) || price <= 0) { setError('Precio inválido'); return; }
-    if (form.variants.length === 0 || form.variants.some(v => !v.label.trim())) {
-      setError('Completá todas las variantes');
+
+    let variants = form.variants;
+    if (variants.length === 0) {
+      variants = [{ label: 'Única', stock: 10 }];
+    } else if (variants.some(v => !v.label.trim())) {
+      setError('Completá todas las variantes o dejá la sección vacía para producto sin variantes');
       return;
     }
-    addProduct({ name: form.name, price, category: form.category, image: form.image, description: form.description, variants: form.variants, active: true });
+
+    addProduct({ name: form.name, price, category: form.category, image: form.image, description: form.description, variants, active: true });
     setSuccess(`"${form.name}" agregado.`);
     setForm(emptyForm);
     setTimeout(() => setSuccess(''), 3000);
@@ -388,7 +497,7 @@ export function AdminPanel() {
 
         {/* Tabs */}
         <div style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }} className="flex gap-8 mb-10">
-          {([['list', `Productos (${products.length})`], ['add', 'Agregar producto']] as const).map(([tab, label]) => (
+          {([['list', `Productos (${products.length})`], ['add', 'Agregar producto'], ['carousel', 'Carrusel']] as const).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -489,22 +598,11 @@ export function AdminPanel() {
               </div>
             </div>
 
-            <div>
-              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">URL de imagen *</label>
-              <input
-                type="url"
-                value={form.image}
-                onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
-                placeholder="https://..."
-                required
-                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '11px 14px', fontSize: '0.88rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
-              />
-              {form.image && (
-                <div className="mt-2 overflow-hidden" style={{ width: '80px', height: '80px', borderRadius: '1px', border: '1px solid rgba(0,0,0,0.08)' }}>
-                  <img src={form.image} alt="Preview" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
-                </div>
-              )}
-            </div>
+            <ImageUpload
+              value={form.image}
+              onChange={(url) => setForm(f => ({ ...f, image: url }))}
+              label="Imagen del producto *"
+            />
 
             <div>
               <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Descripción</label>
@@ -520,10 +618,10 @@ export function AdminPanel() {
             {/* Variants section */}
             <div>
               <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">
-                Stock por variante *
+                Stock por variante (opcional)
               </label>
               <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '12px' }}>
-                Ingresá cada variante (talla, medida, etc.) y su stock disponible.
+                Si tu producto tiene variantes (tallas, medidas), agregalas aquí. Si no tiene variantes, dejá esta sección vacía.
               </p>
               <VariantBuilder
                 variants={form.variants}
@@ -552,6 +650,9 @@ export function AdminPanel() {
             </button>
           </form>
         )}
+
+        {/* ── Carousel manager ── */}
+        {activeTab === 'carousel' && <CarouselManager />}
       </div>
     </div>
   );

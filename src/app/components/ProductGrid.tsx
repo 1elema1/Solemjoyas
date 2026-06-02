@@ -68,27 +68,40 @@ function VariantSelector({
 }
 
 function ProductDetailModal({ product, onClose }: { product: Product; onClose: () => void }) {
-  const { addToCart, setCartOpen } = useStore();
+  const { addToCart, setCartOpen, getAvailableStock } = useStore();
   const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
   const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
     isSingle ? 'Única' : undefined
   );
   const [added, setAdded] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const canAdd = isSingle || Boolean(selectedVariant);
 
   const handleAdd = () => {
     if (!canAdd) return;
-    addToCart(product.id, selectedVariant);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
+    setErrorMsg('');
+    const result = addToCart(product.id, selectedVariant);
+    if (result.success) {
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1500);
+    } else {
+      setErrorMsg(result.message || 'Error al agregar al carrito');
+      setTimeout(() => setErrorMsg(''), 3000);
+    }
   };
 
   const handleBuyNow = () => {
     if (!canAdd) return;
-    addToCart(product.id, selectedVariant);
-    onClose();
-    setCartOpen(true);
+    setErrorMsg('');
+    const result = addToCart(product.id, selectedVariant);
+    if (result.success) {
+      onClose();
+      setCartOpen(true);
+    } else {
+      setErrorMsg(result.message || 'Error al agregar al carrito');
+      setTimeout(() => setErrorMsg(''), 3000);
+    }
   };
 
   return (
@@ -156,6 +169,17 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
                 Material: Plata 925
               </p>
             </div>
+
+            {errorMsg && (
+              <div style={{
+                backgroundColor: 'rgba(192,57,43,0.1)',
+                border: '1px solid rgba(192,57,43,0.3)',
+                padding: '10px 14px',
+                marginBottom: '12px',
+              }}>
+                <p style={{ color: '#c0392b', fontSize: '0.75rem' }}>{errorMsg}</p>
+              </div>
+            )}
 
             <div className="flex flex-col gap-3">
               <button
@@ -292,7 +316,7 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export function ProductGrid() {
-  const { clientProducts, selectedCategory, setSelectedCategory, setCurrentView } = useStore();
+  const { clientProducts, selectedCategory, setSelectedCategory, setCurrentView, searchQuery } = useStore();
   const [activeCategory, setActiveCategory] = useState<string | null>(selectedCategory);
 
   useEffect(() => { setActiveCategory(selectedCategory); }, [selectedCategory]);
@@ -302,9 +326,18 @@ export function ProductGrid() {
     setSelectedCategory(cat);
   };
 
-  const filtered = activeCategory
+  let filtered = activeCategory
     ? clientProducts.filter(p => p.category === activeCategory)
     : clientProducts;
+
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(query) ||
+      p.description.toLowerCase().includes(query) ||
+      p.category.toLowerCase().includes(query)
+    );
+  }
 
   return (
     <div style={{ backgroundColor: '#F5F0E8', minHeight: '100vh' }}>
@@ -320,7 +353,7 @@ export function ProductGrid() {
 
         <div className="mb-12">
           <p style={{ color: '#6B8F71', fontSize: '0.68rem', letterSpacing: '0.25em' }} className="uppercase mb-3">
-            {activeCategory ? 'Categoría' : 'Tienda'}
+            {searchQuery ? 'Búsqueda' : activeCategory ? 'Categoría' : 'Tienda'}
           </p>
           <h1
             style={{
@@ -330,8 +363,13 @@ export function ProductGrid() {
               fontWeight: 300,
             }}
           >
-            {activeCategory ?? 'Toda la colección'}
+            {searchQuery ? `"${searchQuery}"` : activeCategory ?? 'Toda la colección'}
           </h1>
+          {searchQuery && (
+            <p style={{ color: '#888', fontSize: '0.85rem', marginTop: '8px' }}>
+              {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
+            </p>
+          )}
         </div>
 
         {/* Category tabs */}

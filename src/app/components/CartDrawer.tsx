@@ -1,12 +1,14 @@
-import { X, Minus, Plus, Trash2, MessageCircle } from 'lucide-react';
+import { X, Minus, Plus, Trash2, MessageCircle, AlertCircle } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useState } from 'react';
 
 export function CartDrawer() {
   const {
     cartOpen, setCartOpen, cart, products,
     updateQuantity, removeFromCart, cartTotal, cartCount,
-    generateWhatsAppLink, clearCart,
+    generateWhatsAppLink, clearCart, getAvailableStock,
   } = useStore();
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleWhatsApp = () => {
     if (cart.length === 0) return;
@@ -67,6 +69,22 @@ export function CartDrawer() {
 
         {/* Items */}
         <div className="flex-1 overflow-y-auto px-7 py-5">
+          {errorMsg && (
+            <div
+              style={{
+                backgroundColor: 'rgba(192,57,43,0.1)',
+                border: '1px solid rgba(192,57,43,0.3)',
+                padding: '10px 12px',
+                marginBottom: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <AlertCircle size={14} style={{ color: '#c0392b', flexShrink: 0 }} />
+              <p style={{ color: '#c0392b', fontSize: '0.75rem' }}>{errorMsg}</p>
+            </div>
+          )}
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-16">
               <div style={{ color: '#6B8F71', fontSize: '3rem', marginBottom: '18px', lineHeight: 1 }}>✦</div>
@@ -124,7 +142,10 @@ export function CartDrawer() {
                           style={{ border: '1px solid rgba(0,0,0,0.12)' }}
                         >
                           <button
-                            onClick={() => updateQuantity(product.id, item.quantity - 1, item.variant)}
+                            onClick={() => {
+                              setErrorMsg('');
+                              updateQuantity(product.id, item.quantity - 1, item.variant);
+                            }}
                             style={{ padding: '5px 9px', color: '#1a1a1a', border: 'none', background: 'none', cursor: 'pointer' }}
                             className="hover:bg-black/5 transition-colors"
                           >
@@ -134,7 +155,14 @@ export function CartDrawer() {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => updateQuantity(product.id, item.quantity + 1, item.variant)}
+                            onClick={() => {
+                              setErrorMsg('');
+                              const result = updateQuantity(product.id, item.quantity + 1, item.variant);
+                              if (!result.success) {
+                                setErrorMsg(result.message || 'Error al actualizar cantidad');
+                                setTimeout(() => setErrorMsg(''), 3000);
+                              }
+                            }}
                             style={{ padding: '5px 9px', color: '#1a1a1a', border: 'none', background: 'none', cursor: 'pointer' }}
                             className="hover:bg-black/5 transition-colors"
                           >

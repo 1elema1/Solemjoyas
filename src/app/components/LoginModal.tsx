@@ -8,7 +8,9 @@ export function LoginModal() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -16,8 +18,10 @@ export function LoginModal() {
     setName('');
     setEmail('');
     setPassword('');
+    setConfirmPassword('');
     setError('');
     setShowPass(false);
+    setShowConfirmPass(false);
   };
 
   const handleClose = () => {
@@ -26,13 +30,29 @@ export function LoginModal() {
     setMode('login');
   };
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     await new Promise(r => setTimeout(r, 300));
 
+    if (!validateEmail(email)) {
+      setError('Por favor ingresá un email válido');
+      setLoading(false);
+      return;
+    }
+
     if (mode === 'login') {
+      if (!email.trim() || !password.trim()) {
+        setError('Por favor completá todos los campos');
+        setLoading(false);
+        return;
+      }
       const result = login(email, password);
       if (result.success) {
         if (email === 'admin@solem.com') setCurrentView('admin');
@@ -41,8 +61,10 @@ export function LoginModal() {
         setError(result.message);
       }
     } else {
-      if (!name.trim()) { setError('Ingresá tu nombre'); setLoading(false); return; }
+      if (!name.trim()) { setError('Por favor ingresá tu nombre'); setLoading(false); return; }
+      if (name.trim().length < 2) { setError('El nombre debe tener al menos 2 caracteres'); setLoading(false); return; }
       if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres'); setLoading(false); return; }
+      if (password !== confirmPassword) { setError('Las contraseñas no coinciden'); setLoading(false); return; }
       const result = register(name, email, password);
       if (result.success) {
         handleClose();
@@ -138,6 +160,7 @@ export function LoginModal() {
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                minLength={6}
                 style={{
                   width: '100%',
                   border: '1px solid rgba(0,0,0,0.15)',
@@ -156,7 +179,42 @@ export function LoginModal() {
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            {mode === 'register' && (
+              <p style={{ color: '#888', fontSize: '0.7rem', marginTop: '4px' }}>Mínimo 6 caracteres</p>
+            )}
           </div>
+
+          {mode === 'register' && (
+            <div>
+              <label style={{ color: '#888', fontSize: '0.68rem', letterSpacing: '0.12em' }} className="uppercase block mb-2">Confirmar contraseña</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPass ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  style={{
+                    width: '100%',
+                    border: '1px solid rgba(0,0,0,0.15)',
+                    backgroundColor: 'transparent',
+                    padding: '10px 40px 10px 14px',
+                    color: '#1a1a1a',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPass(v => !v)}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#888' }}
+                >
+                  {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+          )}
 
           {mode === 'login' && (
             <div style={{ padding: '10px 14px', backgroundColor: 'rgba(107,143,113,0.08)', border: '1px solid rgba(107,143,113,0.2)' }}>

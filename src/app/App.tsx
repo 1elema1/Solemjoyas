@@ -10,9 +10,17 @@ function AppContent() {
   const { currentView, user } = useStore();
 
   return (
-    <div style={{ backgroundColor: '#F5F0E8', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{
+      backgroundColor: '#F5F0E8',
+      minHeight: '100vh',
+      height: '100%',
+      width: '100%',
+      fontFamily: 'system-ui, sans-serif',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       <Navbar />
-      <main>
+      <main style={{ flex: 1 }}>
         {currentView === 'home' && <Hero />}
         {currentView === 'products' && <ProductGrid />}
         {currentView === 'admin' && user?.role === 'admin' && <AdminPanel />}

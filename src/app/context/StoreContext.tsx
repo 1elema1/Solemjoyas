@@ -16,6 +16,10 @@ export interface Product {
   active: boolean;
 }
 
+export interface CarouselSettings {
+  images: string[];
+}
+
 export interface CartItem {
   productId: string;
   quantity: number;
@@ -36,9 +40,9 @@ interface StoreContextType {
   toggleActive: (id: string) => void;
   clientProducts: Product[]; // only active + has stock
   cart: CartItem[];
-  addToCart: (productId: string, variant?: string) => void;
+  addToCart: (productId: string, variant?: string) => { success: boolean; message?: string };
   removeFromCart: (productId: string, variant?: string) => void;
-  updateQuantity: (productId: string, qty: number, variant?: string) => void;
+  updateQuantity: (productId: string, qty: number, variant?: string) => { success: boolean; message?: string };
   clearCart: () => void;
   cartTotal: number;
   cartCount: number;
@@ -55,6 +59,11 @@ interface StoreContextType {
   register: (name: string, email: string, password: string) => { success: boolean; message: string };
   logout: () => void;
   generateWhatsAppLink: () => string;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  carouselImages: string[];
+  updateCarouselImages: (images: string[]) => void;
+  getAvailableStock: (productId: string, variant?: string) => number;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -110,6 +119,12 @@ function hasStock(product: Product): boolean {
   return product.variants.some(v => v.stock > 0);
 }
 
+const DEFAULT_CAROUSEL_IMAGES = [
+  'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800',
+  'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=800',
+  'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800',
+];
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(() => {
     const stored = loadFromStorage<Product[]>('solem_products_v2', []);
@@ -121,6 +136,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loginOpen, setLoginOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'products' | 'admin'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [carouselImages, setCarouselImages] = useState<string[]>(() =>
+    loadFromStorage('solem_carousel', DEFAULT_CAROUSEL_IMAGES)
+  );
 
   useEffect(() => { localStorage.setItem('solem_products_v2', JSON.stringify(products)); }, [products]);
   useEffect(() => { localStorage.setItem('solem_cart_v2', JSON.stringify(cart)); }, [cart]);
@@ -128,6 +147,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (user) localStorage.setItem('solem_user', JSON.stringify(user));
     else localStorage.removeItem('solem_user');
   }, [user]);
+  useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
 
   const clientProducts = products.filter(p => p.active && hasStock(p));
 
@@ -147,21 +167,74 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, active: !p.active } : p));
   };
 
-  const addToCart = (productId: string, variant?: string) => {
+  const getAvailableStock = (productId: string, variant?: string): number => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return 0;
+
+    if (variant) {
+      const v = product.variants.find(vr => vr.label === variant);
+      return v?.stock ?? 0;
+    }
+
+    return product.variants.reduce((sum, v) => sum + v.stock, 0);
+  };
+
+  const addToCart = (productId: string, variant?: string): { success: boolean; message?: string } => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return { success: false, message: 'Producto no encontrado' };
+
+    const availableStock = getAvailableStock(productId, variant);
+    const currentCartItem = cart.find(i => i.productId === productId && i.variant === variant);
+    const currentQuantity = currentCartItem?.quantity ?? 0;
+
+    if (currentQuantity >= availableStock) {
+      return {
+        success: false,
+        message: `No hay más stock disponible de este producto${variant && variant !== 'Única' ? ` (${variant})` : ''}`
+      };
+    }
+
     setCart(prev => {
       const existing = prev.find(i => i.productId === productId && i.variant === variant);
-      if (existing) return prev.map(i => i.productId === productId && i.variant === variant ? { ...i, quantity: i.quantity + 1 } : i);
+      if (existing) {
+        return prev.map(i =>
+          i.productId === productId && i.variant === variant
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
+        );
+      }
       return [...prev, { productId, quantity: 1, variant }];
     });
+
+    return { success: true };
   };
 
   const removeFromCart = (productId: string, variant?: string) => {
     setCart(prev => prev.filter(i => !(i.productId === productId && i.variant === variant)));
   };
 
-  const updateQuantity = (productId: string, qty: number, variant?: string) => {
-    if (qty <= 0) { removeFromCart(productId, variant); return; }
-    setCart(prev => prev.map(i => i.productId === productId && i.variant === variant ? { ...i, quantity: qty } : i));
+  const updateQuantity = (productId: string, qty: number, variant?: string): { success: boolean; message?: string } => {
+    if (qty <= 0) {
+      removeFromCart(productId, variant);
+      return { success: true };
+    }
+
+    const availableStock = getAvailableStock(productId, variant);
+
+    if (qty > availableStock) {
+      return {
+        success: false,
+        message: `Solo hay ${availableStock} unidades disponibles`
+      };
+    }
+
+    setCart(prev => prev.map(i =>
+      i.productId === productId && i.variant === variant
+        ? { ...i, quantity: qty }
+        : i
+    ));
+
+    return { success: true };
   };
 
   const clearCart = () => setCart([]);
@@ -210,6 +283,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
   };
 
+  const updateCarouselImages = (images: string[]) => {
+    setCarouselImages(images);
+  };
+
   return (
     <StoreContext.Provider value={{
       products, addProduct, deleteProduct, updateProduct, toggleActive, clientProducts,
@@ -217,6 +294,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cartOpen, setCartOpen, loginOpen, setLoginOpen,
       currentView, setCurrentView, selectedCategory, setSelectedCategory,
       user, login, register, logout, generateWhatsAppLink,
+      searchQuery, setSearchQuery, carouselImages, updateCarouselImages, getAvailableStock,
     }}>
       {children}
     </StoreContext.Provider>

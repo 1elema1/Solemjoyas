@@ -2,11 +2,16 @@ import { ShoppingBag, User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import logo from '../../imports/Photoroom_20250815_205827.PNG';
 import { useState } from 'react';
+import { SearchBar } from './SearchBar';
 
 const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
 
 export function Navbar() {
-  const { cartCount, setCartOpen, setLoginOpen, user, logout, setCurrentView, setSelectedCategory, currentView } = useStore();
+  const {
+    cartCount, setCartOpen, setLoginOpen, user, logout,
+    setCurrentView, setSelectedCategory, currentView,
+    searchQuery, setSearchQuery
+  } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleCategoryClick = (cat: string) => {
@@ -23,8 +28,8 @@ export function Navbar() {
   return (
     <nav style={{ backgroundColor: '#F5F0E8', borderBottom: '1px solid rgba(0,0,0,0.08)' }} className="sticky top-0 z-50 w-full">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
-        {/* Left: Shop + categories dropdown */}
-        <div className="flex items-center gap-6">
+        {/* Left: Shop + categories dropdown + Search */}
+        <div className="flex items-center gap-4 lg:gap-6">
           <button
             onClick={() => setCurrentView('products') || setSelectedCategory(null)}
             style={{ color: '#1a1a1a', letterSpacing: '0.12em', fontSize: '0.72rem' }}
@@ -57,6 +62,19 @@ export function Navbar() {
                 ))}
               </div>
             )}
+          </div>
+          <div className="hidden lg:block">
+            <SearchBar
+              value={searchQuery}
+              onChange={(q) => {
+                setSearchQuery(q);
+                if (q) {
+                  setCurrentView('products');
+                  setSelectedCategory(null);
+                }
+              }}
+              onClear={() => setSearchQuery('')}
+            />
           </div>
         </div>
 
@@ -120,19 +138,34 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile categories bar */}
-      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }} className="md:hidden overflow-x-auto">
-        <div className="flex px-4 py-2 gap-4 w-max">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryClick(cat)}
-              style={{ color: '#1a1a1a', fontSize: '0.7rem', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}
-              className="uppercase"
-            >
-              {cat}
-            </button>
-          ))}
+      {/* Mobile categories bar + search */}
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }} className="lg:hidden">
+        <div className="px-4 py-3">
+          <SearchBar
+            value={searchQuery}
+            onChange={(q) => {
+              setSearchQuery(q);
+              if (q) {
+                setCurrentView('products');
+                setSelectedCategory(null);
+              }
+            }}
+            onClear={() => setSearchQuery('')}
+          />
+        </div>
+        <div className="overflow-x-auto md:hidden">
+          <div className="flex px-4 pb-2 gap-4 w-max">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => handleCategoryClick(cat)}
+                style={{ color: '#1a1a1a', fontSize: '0.7rem', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}
+                className="uppercase"
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

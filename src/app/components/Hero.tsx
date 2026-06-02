@@ -1,4 +1,5 @@
 import { useStore } from '../context/StoreContext';
+import { ImageCarousel } from './ImageCarousel';
 
 const HERO_IMAGE = 'https://images.unsplash.com/photo-1589674781759-c21c37956a44?w=900&q=80';
 
@@ -15,7 +16,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
 const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
 
 export function Hero() {
-  const { setCurrentView, setSelectedCategory } = useStore();
+  const { setCurrentView, setSelectedCategory, carouselImages } = useStore();
 
   const goCategory = (cat: string) => { setSelectedCategory(cat); setCurrentView('products'); };
   const goAll = () => { setSelectedCategory(null); setCurrentView('products'); };
@@ -191,6 +192,26 @@ export function Hero() {
             </div>
           </button>
         </div>
+      </section>
+
+      {/* ── Carousel section ── */}
+      <section className="max-w-7xl mx-auto px-6 py-12">
+        <div className="text-center mb-8">
+          <p style={{ color: '#6B8F71', fontSize: '0.68rem', letterSpacing: '0.25em' }} className="uppercase mb-2">
+            Inspiración
+          </p>
+          <h2
+            style={{
+              fontFamily: '"Cormorant Garamond", "Georgia", serif',
+              fontSize: 'clamp(1.6rem, 3.5vw, 2.5rem)',
+              color: '#1a1a1a',
+              fontWeight: 300,
+            }}
+          >
+            Descubrí nuestras piezas
+          </h2>
+        </div>
+        <ImageCarousel images={carouselImages} />
       </section>
 
       {/* ── Footer strip ── */}
