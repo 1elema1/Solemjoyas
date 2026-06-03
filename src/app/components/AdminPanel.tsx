@@ -453,7 +453,7 @@ export function AdminPanel() {
         image: form.image,
         description: form.description,
         variants: form.variants,
-        colors: colors.length > 0 ? colors : undefined,
+        colors: colors, // <-- ACÁ ESTÁ EL ARREGLO
         active: true,
       };
     } else {
@@ -465,7 +465,7 @@ export function AdminPanel() {
         image: form.image,
         description: form.description,
         generalStock,
-        colors: colors.length > 0 ? colors : undefined,
+        colors: colors, // <-- ACÁ TAMBIÉN ESTÁ EL ARREGLO
         active: true,
       };
     }
