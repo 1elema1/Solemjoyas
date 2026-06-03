@@ -1,43 +1,31 @@
 import { useState } from 'react';
-import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle, Image } from 'lucide-react';
-import { useStore, Product, Variant, ColorVariant } from '../context/StoreContext';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react';
+import { useStore, Product, Variant, ColorVariant, hasStock } from '../context/StoreContext';
 import { ImageUpload } from './ImageUpload';
 
 const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
 
-const DEFAULT_VARIANTS: Record<string, string[]> = {
-  Anillos: ['12', '13', '14', '15', '16', '17', '18', '19'],
-  Collares: ['40cm', '42cm', '45cm', '50cm'],
-  Pulseras: ['16cm', '17cm', '18cm', '19cm', '20cm'],
-  Argollas: ['20mm', '25mm', '30mm', '40mm'],
-  Aros: ['Única'],
-  Dijes: ['Única'],
-  Abridores: ['Única'],
-};
+function productTotalStock(product: Product): number {
+  if (product.variants && product.variants.length > 0) {
+    return product.variants.reduce((s, v) => s + v.stock, 0);
+  }
+  return product.generalStock ?? 0;
+}
 
 function statusInfo(product: Product) {
-  const totalStock = product.variants.reduce((s, v) => s + v.stock, 0);
-  const hasStock = totalStock > 0;
+  const total = productTotalStock(product);
   if (!product.active) return { label: 'Inactivo', color: '#aaa', bg: 'rgba(0,0,0,0.05)', reason: 'desactivado manualmente' };
-  if (!hasStock) return { label: 'Sin stock', color: '#c0392b', bg: 'rgba(192,57,43,0.08)', reason: 'stock agotado — inactivo en tienda' };
+  if (!hasStock(product)) return { label: 'Sin stock', color: '#c0392b', bg: 'rgba(192,57,43,0.08)', reason: 'stock agotado — inactivo en tienda' };
   return { label: 'Activo', color: '#6B8F71', bg: 'rgba(107,143,113,0.1)', reason: '' };
 }
 
-// ── Toggle component ──────────────────────────────────────────────────────────
 function ActiveToggle({ active, onChange }: { active: boolean; onChange: () => void }) {
   return (
     <button
       onClick={onChange}
       title={active ? 'Click para desactivar' : 'Click para activar'}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        padding: '4px 0',
-      }}
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}
     >
       {active
         ? <ToggleRight size={26} style={{ color: '#6B8F71' }} />
@@ -50,14 +38,15 @@ function ActiveToggle({ active, onChange }: { active: boolean; onChange: () => v
   );
 }
 
-// ── Expandable product row in admin list ──────────────────────────────────────
 function AdminProductRow({ product }: { product: Product }) {
   const { toggleActive, updateProduct, deleteProduct } = useStore();
   const [expanded, setExpanded] = useState(false);
-  const [localVariants, setLocalVariants] = useState<Variant[]>(product.variants);
+  const hasVariants = !!(product.variants && product.variants.length > 0);
+  const [localVariants, setLocalVariants] = useState<Variant[]>(product.variants ?? []);
+  const [localGeneralStock, setLocalGeneralStock] = useState<number>(product.generalStock ?? 0);
   const [saved, setSaved] = useState(false);
 
-  const totalStock = localVariants.reduce((s, v) => s + v.stock, 0);
+  const totalStock = productTotalStock(product);
   const status = statusInfo(product);
 
   const handleStockChange = (label: string, delta: number) => {
@@ -74,7 +63,11 @@ function AdminProductRow({ product }: { product: Product }) {
 
   const saveStock = async () => {
     try {
-      await updateProduct(product.id, { variants: localVariants });
+      if (hasVariants) {
+        await updateProduct(product.id, { variants: localVariants });
+      } else {
+        await updateProduct(product.id, { generalStock: localGeneralStock });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
@@ -82,14 +75,11 @@ function AdminProductRow({ product }: { product: Product }) {
     }
   };
 
-  const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
-
   return (
     <div style={{ backgroundColor: 'rgba(255,255,255,0.55)', border: '1px solid rgba(0,0,0,0.07)', marginBottom: '8px' }}>
-      {/* Row summary */}
       <div className="flex items-center gap-4 p-4">
         <div className="flex-shrink-0 overflow-hidden" style={{ width: '60px', height: '60px', borderRadius: '1px' }}>
-          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+          <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -145,54 +135,102 @@ function AdminProductRow({ product }: { product: Product }) {
         </div>
       </div>
 
-      {/* Expanded: variant stock editor */}
       {expanded && (
         <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', padding: '16px 20px', backgroundColor: 'rgba(0,0,0,0.015)' }}>
-          <p style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.18em' }} className="uppercase mb-4">
-            Stock por variante
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
-            {localVariants.map(v => (
-              <div key={v.label} style={{ border: '1px solid rgba(0,0,0,0.1)', padding: '10px 12px' }}>
-                <p style={{ color: '#555', fontSize: '0.72rem', letterSpacing: '0.06em', marginBottom: '8px' }}>{v.label}</p>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleStockChange(v.label, -1)}
-                    style={{ border: '1px solid rgba(0,0,0,0.12)', padding: '3px 7px', background: 'none', cursor: 'pointer', color: '#666' }}
-                    className="hover:bg-black/5"
-                  >
-                    <Minus size={10} />
-                  </button>
-                  <input
-                    type="number"
-                    value={v.stock}
-                    onChange={e => handleStockInput(v.label, e.target.value)}
-                    min={0}
-                    style={{
-                      width: '44px',
-                      textAlign: 'center',
-                      border: '1px solid rgba(0,0,0,0.12)',
-                      padding: '3px 4px',
-                      fontSize: '0.82rem',
-                      color: v.stock === 0 ? '#c0392b' : '#1a1a1a',
-                      background: 'transparent',
-                      outline: 'none',
-                    }}
-                  />
-                  <button
-                    onClick={() => handleStockChange(v.label, 1)}
-                    style={{ border: '1px solid rgba(0,0,0,0.12)', padding: '3px 7px', background: 'none', cursor: 'pointer', color: '#666' }}
-                    className="hover:bg-black/5"
-                  >
-                    <Plus size={10} />
-                  </button>
-                </div>
-                {v.stock === 0 && (
-                  <p style={{ color: '#c0392b', fontSize: '0.58rem', marginTop: '4px' }}>Sin stock</p>
+          {hasVariants ? (
+            <>
+              <p style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.18em' }} className="uppercase mb-4">
+                Stock por variante
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+                {localVariants.map(v => (
+                  <div key={v.label} style={{ border: '1px solid rgba(0,0,0,0.1)', padding: '10px 12px' }}>
+                    <p style={{ color: '#555', fontSize: '0.72rem', letterSpacing: '0.06em', marginBottom: '8px' }}>{v.label}</p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleStockChange(v.label, -1)}
+                        style={{ border: '1px solid rgba(0,0,0,0.12)', padding: '3px 7px', background: 'none', cursor: 'pointer', color: '#666' }}
+                        className="hover:bg-black/5"
+                      >
+                        <Minus size={10} />
+                      </button>
+                      <input
+                        type="number"
+                        value={v.stock}
+                        onChange={e => handleStockInput(v.label, e.target.value)}
+                        min={0}
+                        style={{
+                          width: '44px',
+                          textAlign: 'center',
+                          border: '1px solid rgba(0,0,0,0.12)',
+                          padding: '3px 4px',
+                          fontSize: '0.82rem',
+                          color: v.stock === 0 ? '#c0392b' : '#1a1a1a',
+                          background: 'transparent',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        onClick={() => handleStockChange(v.label, 1)}
+                        style={{ border: '1px solid rgba(0,0,0,0.12)', padding: '3px 7px', background: 'none', cursor: 'pointer', color: '#666' }}
+                        className="hover:bg-black/5"
+                      >
+                        <Plus size={10} />
+                      </button>
+                    </div>
+                    {v.stock === 0 && (
+                      <p style={{ color: '#c0392b', fontSize: '0.58rem', marginTop: '4px' }}>Sin stock</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.18em' }} className="uppercase mb-4">
+                Stock general
+              </p>
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setLocalGeneralStock(s => Math.max(0, s - 1))}
+                  style={{ border: '1px solid rgba(0,0,0,0.12)', padding: '5px 10px', background: 'none', cursor: 'pointer', color: '#666' }}
+                  className="hover:bg-black/5"
+                >
+                  <Minus size={12} />
+                </button>
+                <input
+                  type="number"
+                  value={localGeneralStock}
+                  onChange={e => {
+                    const n = parseInt(e.target.value);
+                    if (!isNaN(n) && n >= 0) setLocalGeneralStock(n);
+                  }}
+                  min={0}
+                  style={{
+                    width: '70px',
+                    textAlign: 'center',
+                    border: '1px solid rgba(0,0,0,0.12)',
+                    padding: '5px 8px',
+                    fontSize: '0.88rem',
+                    color: localGeneralStock === 0 ? '#c0392b' : '#1a1a1a',
+                    background: 'transparent',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => setLocalGeneralStock(s => s + 1)}
+                  style={{ border: '1px solid rgba(0,0,0,0.12)', padding: '5px 10px', background: 'none', cursor: 'pointer', color: '#666' }}
+                  className="hover:bg-black/5"
+                >
+                  <Plus size={12} />
+                </button>
+                {localGeneralStock === 0 && (
+                  <span style={{ color: '#c0392b', fontSize: '0.72rem' }}>Sin stock</span>
                 )}
               </div>
-            ))}
-          </div>
+            </>
+          )}
+
           <button
             onClick={saveStock}
             style={{
@@ -215,24 +253,13 @@ function AdminProductRow({ product }: { product: Product }) {
   );
 }
 
-// ── Variant builder inside add-product form ────────────────────────────────────
-function VariantBuilder({
-  variants,
-  onChange,
-}: {
-  variants: Variant[];
-  onChange: (v: Variant[]) => void;
-}) {
+function VariantBuilder({ variants, onChange }: { variants: Variant[]; onChange: (v: Variant[]) => void }) {
   const updateLabel = (i: number, label: string) => {
-    const next = [...variants];
-    next[i] = { ...next[i], label };
-    onChange(next);
+    const next = [...variants]; next[i] = { ...next[i], label }; onChange(next);
   };
   const updateStock = (i: number, stock: string) => {
     const n = Math.max(0, parseInt(stock) || 0);
-    const next = [...variants];
-    next[i] = { ...next[i], stock: n };
-    onChange(next);
+    const next = [...variants]; next[i] = { ...next[i], stock: n }; onChange(next);
   };
   const add = () => onChange([...variants, { label: '', stock: 0 }]);
   const remove = (i: number) => onChange(variants.filter((_, idx) => idx !== i));
@@ -247,15 +274,7 @@ function VariantBuilder({
               value={v.label}
               onChange={e => updateLabel(i, e.target.value)}
               placeholder="Ej: 40cm, Talla 15, Única…"
-              style={{
-                flex: 1,
-                border: '1px solid rgba(0,0,0,0.12)',
-                padding: '8px 12px',
-                fontSize: '0.82rem',
-                background: 'transparent',
-                color: '#1a1a1a',
-                outline: 'none',
-              }}
+              style={{ flex: 1, border: '1px solid rgba(0,0,0,0.12)', padding: '8px 12px', fontSize: '0.82rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
             />
             <input
               type="number"
@@ -263,22 +282,9 @@ function VariantBuilder({
               onChange={e => updateStock(i, e.target.value)}
               placeholder="Stock"
               min={0}
-              style={{
-                width: '80px',
-                border: '1px solid rgba(0,0,0,0.12)',
-                padding: '8px 10px',
-                fontSize: '0.82rem',
-                background: 'transparent',
-                color: '#1a1a1a',
-                outline: 'none',
-              }}
+              style={{ width: '80px', border: '1px solid rgba(0,0,0,0.12)', padding: '8px 10px', fontSize: '0.82rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
             />
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              style={{ color: '#ccc', background: 'none', border: 'none', cursor: 'pointer' }}
-              className="hover:text-red-400 transition-colors flex-shrink-0"
-            >
+            <button type="button" onClick={() => remove(i)} style={{ color: '#ccc', background: 'none', border: 'none', cursor: 'pointer' }} className="hover:text-red-400 transition-colors flex-shrink-0">
               <Trash2 size={14} />
             </button>
           </div>
@@ -287,15 +293,7 @@ function VariantBuilder({
       <button
         type="button"
         onClick={add}
-        style={{
-          fontSize: '0.65rem',
-          letterSpacing: '0.12em',
-          color: '#6B8F71',
-          border: '1px dashed #6B8F71',
-          padding: '7px 14px',
-          background: 'none',
-          cursor: 'pointer',
-        }}
+        style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#6B8F71', border: '1px dashed #6B8F71', padding: '7px 14px', background: 'none', cursor: 'pointer' }}
         className="uppercase hover:bg-green-50/30 transition-colors"
       >
         + Agregar variante
@@ -304,23 +302,12 @@ function VariantBuilder({
   );
 }
 
-// ── Color builder inside add-product form ──────────────────────────────────────
-function ColorBuilder({
-  colors,
-  onChange,
-}: {
-  colors: ColorVariant[];
-  onChange: (c: ColorVariant[]) => void;
-}) {
+function ColorBuilder({ colors, onChange }: { colors: ColorVariant[]; onChange: (c: ColorVariant[]) => void }) {
   const updateColor = (i: number, color: string) => {
-    const next = [...colors];
-    next[i] = { ...next[i], color };
-    onChange(next);
+    const next = [...colors]; next[i] = { ...next[i], color }; onChange(next);
   };
   const updateImage = (i: number, image: string) => {
-    const next = [...colors];
-    next[i] = { ...next[i], image };
-    onChange(next);
+    const next = [...colors]; next[i] = { ...next[i], image }; onChange(next);
   };
   const add = () => onChange([...colors, { color: '', image: '' }]);
   const remove = (i: number) => onChange(colors.filter((_, idx) => idx !== i));
@@ -336,35 +323,20 @@ function ColorBuilder({
                 value={c.color}
                 onChange={e => updateColor(i, e.target.value)}
                 placeholder="Nombre del color (ej: Plateado, Dorado)"
-                style={{
-                  flex: 1,
-                  border: '1px solid rgba(0,0,0,0.12)',
-                  padding: '8px 12px',
-                  fontSize: '0.82rem',
-                  background: 'transparent',
-                  color: '#1a1a1a',
-                  outline: 'none',
-                }}
+                style={{ flex: 1, border: '1px solid rgba(0,0,0,0.12)', padding: '8px 12px', fontSize: '0.82rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
               />
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                style={{ color: '#ccc', background: 'none', border: 'none', cursor: 'pointer' }}
-                className="hover:text-red-400 transition-colors flex-shrink-0"
-              >
+              <button type="button" onClick={() => remove(i)} style={{ color: '#ccc', background: 'none', border: 'none', cursor: 'pointer' }} className="hover:text-red-400 transition-colors flex-shrink-0">
                 <Trash2 size={14} />
               </button>
             </div>
             <ImageUpload
               value={c.image}
               onChange={(url) => updateImage(i, url)}
-              label={`Foto del producto en ${c.color || 'este color'} (cuadrada)`}
+              label={`Foto del producto en ${c.color || 'este color'}`}
             />
             {c.image && (
               <div className="mt-2">
-                <div style={{ width: '100px', height: '100px', border: '1px solid rgba(0,0,0,0.1)' }}>
-                  <img src={c.image} alt={c.color} className="w-full h-full object-cover" />
-                </div>
+                <img src={c.image} alt={c.color} style={{ maxWidth: '100px', height: 'auto', border: '1px solid rgba(0,0,0,0.1)' }} />
               </div>
             )}
           </div>
@@ -373,15 +345,7 @@ function ColorBuilder({
       <button
         type="button"
         onClick={add}
-        style={{
-          fontSize: '0.65rem',
-          letterSpacing: '0.12em',
-          color: '#6B8F71',
-          border: '1px dashed #6B8F71',
-          padding: '7px 14px',
-          background: 'none',
-          cursor: 'pointer',
-        }}
+        style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#6B8F71', border: '1px dashed #6B8F71', padding: '7px 14px', background: 'none', cursor: 'pointer' }}
         className="uppercase hover:bg-green-50/30 transition-colors"
       >
         + Agregar color
@@ -390,21 +354,13 @@ function ColorBuilder({
   );
 }
 
-// ── Carousel Manager ───────────────────────────────────────────────────────────
 function CarouselManager() {
   const { carouselImages, updateCarouselImages } = useStore();
   const [tempImages, setTempImages] = useState(carouselImages);
   const [saved, setSaved] = useState(false);
 
-  const addImage = (url: string) => {
-    if (url.trim()) {
-      setTempImages([...tempImages, url]);
-    }
-  };
-
-  const removeImage = (idx: number) => {
-    setTempImages(tempImages.filter((_, i) => i !== idx));
-  };
+  const addImage = (url: string) => { if (url.trim()) setTempImages([...tempImages, url]); };
+  const removeImage = (idx: number) => setTempImages(tempImages.filter((_, i) => i !== idx));
 
   const save = () => {
     updateCarouselImages(tempImages);
@@ -414,15 +370,7 @@ function CarouselManager() {
 
   return (
     <div>
-      <h3
-        style={{
-          fontFamily: '"Cormorant Garamond","Georgia",serif',
-          fontSize: '1.6rem',
-          color: '#1a1a1a',
-          fontWeight: 300,
-          marginBottom: '16px',
-        }}
-      >
+      <h3 style={{ fontFamily: '"Cormorant Garamond","Georgia",serif', fontSize: '1.6rem', color: '#1a1a1a', fontWeight: 300, marginBottom: '16px' }}>
         Carrusel de Inicio
       </h3>
       <p style={{ color: '#888', fontSize: '0.82rem', marginBottom: '20px' }}>
@@ -432,33 +380,12 @@ function CarouselManager() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {tempImages.map((img, idx) => (
           <div key={idx} className="relative">
-            <div
-              className="overflow-hidden"
-              style={{
-                aspectRatio: '16/9',
-                border: '1px solid rgba(0,0,0,0.1)',
-              }}
-            >
+            <div className="overflow-hidden" style={{ aspectRatio: '16/9', border: '1px solid rgba(0,0,0,0.1)' }}>
               <img src={img} alt={`Carousel ${idx + 1}`} className="w-full h-full object-cover" />
             </div>
             <button
               onClick={() => removeImage(idx)}
-              style={{
-                position: 'absolute',
-                top: '8px',
-                right: '8px',
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '28px',
-                height: '28px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-              }}
+              style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
               className="hover:bg-black transition-colors"
             >
               <Trash2 size={14} />
@@ -467,25 +394,11 @@ function CarouselManager() {
         ))}
       </div>
 
-      <ImageUpload
-        value=""
-        onChange={addImage}
-        label="Agregar nueva imagen al carrusel"
-      />
+      <ImageUpload value="" onChange={addImage} label="Agregar nueva imagen al carrusel" />
 
       <button
         onClick={save}
-        style={{
-          backgroundColor: saved ? '#6B8F71' : '#1a1a1a',
-          color: 'white',
-          fontSize: '0.68rem',
-          letterSpacing: '0.15em',
-          padding: '12px 24px',
-          border: 'none',
-          cursor: 'pointer',
-          marginTop: '20px',
-          transition: 'background-color 0.3s',
-        }}
+        style={{ backgroundColor: saved ? '#6B8F71' : '#1a1a1a', color: 'white', fontSize: '0.68rem', letterSpacing: '0.15em', padding: '12px 24px', border: 'none', cursor: 'pointer', marginTop: '20px', transition: 'background-color 0.3s' }}
         className="uppercase"
       >
         {saved ? '✓ Guardado' : 'Guardar carrusel'}
@@ -494,23 +407,25 @@ function CarouselManager() {
   );
 }
 
-// ── Main admin panel ───────────────────────────────────────────────────────────
 export function AdminPanel() {
-  const { products, addProduct, setCurrentView } = useStore();
+  const navigate = useNavigate();
+  const { products, addProduct } = useStore();
   const [activeTab, setActiveTab] = useState<'list' | 'add' | 'carousel'>('list');
   const [filterCat, setFilterCat] = useState<string | null>(null);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  const emptyForm = { name: '', price: '', category: 'Anillos', image: '', description: '', variants: [] as Variant[], colors: [] as ColorVariant[] };
-  const [form, setForm] = useState(emptyForm);
-
-  const handleCategoryChange = (cat: string) => {
-    setForm(f => ({
-      ...f,
-      category: cat,
-    }));
+  const emptyForm = {
+    name: '',
+    price: '',
+    category: 'Anillos',
+    image: '',
+    description: '',
+    variants: [] as Variant[],
+    colors: [] as ColorVariant[],
+    generalStock: '10',
   };
+  const [form, setForm] = useState(emptyForm);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -522,56 +437,71 @@ export function AdminPanel() {
     const price = parseFloat(form.price);
     if (isNaN(price) || price <= 0) { setError('Precio inválido'); return; }
 
-    let variants = form.variants;
-    if (variants.length === 0) {
-      variants = [{ label: 'Única', stock: 10 }];
-    } else if (variants.some(v => !v.label.trim())) {
-      setError('Completá todas las variantes o dejá la sección vacía para producto sin variantes');
-      return;
-    }
-
     const colors = form.colors.filter(c => c.color.trim() && c.image.trim());
 
+    let productData: Omit<typeof products[0], 'id'>;
+
+    if (form.variants.length > 0) {
+      if (form.variants.some(v => !v.label.trim())) {
+        setError('Completá todas las etiquetas de variantes o eliminá las vacías');
+        return;
+      }
+      productData = {
+        name: form.name,
+        price,
+        category: form.category,
+        image: form.image,
+        description: form.description,
+        variants: form.variants,
+        colors: colors.length > 0 ? colors : undefined,
+        active: true,
+      };
+    } else {
+      const generalStock = parseInt(form.generalStock) || 0;
+      productData = {
+        name: form.name,
+        price,
+        category: form.category,
+        image: form.image,
+        description: form.description,
+        generalStock,
+        colors: colors.length > 0 ? colors : undefined,
+        active: true,
+      };
+    }
+
     try {
-      await addProduct({ name: form.name, price, category: form.category, image: form.image, description: form.description, variants, colors: colors.length > 0 ? colors : undefined, active: true });
+      await addProduct(productData);
       setSuccess(`"${form.name}" agregado.`);
       setForm(emptyForm);
       setTimeout(() => setSuccess(''), 3000);
       setActiveTab('list');
-    } catch (error) {
+    } catch (err) {
       setError('Error al agregar producto');
-      console.error(error);
+      console.error(err);
     }
   };
 
   const filtered = filterCat ? products.filter(p => p.category === filterCat) : products;
-  const outOfStockCount = products.filter(p => p.variants.every(v => v.stock === 0)).length;
+  const outOfStockCount = products.filter(p => !hasStock(p)).length;
 
   return (
     <div style={{ backgroundColor: '#F5F0E8', minHeight: '100vh' }}>
       <div className="max-w-5xl mx-auto px-6 py-12">
 
         <button
-          onClick={() => setCurrentView('home')}
+          onClick={() => navigate('/')}
           style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em', background: 'none', border: 'none', cursor: 'pointer' }}
           className="uppercase flex items-center gap-2 mb-10 hover:opacity-60 transition-opacity"
         >
           <ArrowLeft size={12} /> Volver a la tienda
         </button>
 
-        {/* Header */}
         <div className="mb-10">
           <p style={{ color: '#6B8F71', fontSize: '0.65rem', letterSpacing: '0.25em' }} className="uppercase mb-3">
             Panel de administración
           </p>
-          <h1
-            style={{
-              fontFamily: '"Cormorant Garamond","Georgia",serif',
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
-              color: '#1a1a1a',
-              fontWeight: 300,
-            }}
-          >
+          <h1 style={{ fontFamily: '"Cormorant Garamond","Georgia",serif', fontSize: 'clamp(2rem, 4vw, 3rem)', color: '#1a1a1a', fontWeight: 300 }}>
             Gestión de productos
           </h1>
         </div>
@@ -580,7 +510,7 @@ export function AdminPanel() {
         <div className="grid grid-cols-3 gap-4 mb-10">
           {[
             { label: 'Total productos', value: products.length },
-            { label: 'Activos', value: products.filter(p => p.active && p.variants.some(v => v.stock > 0)).length },
+            { label: 'Activos', value: products.filter(p => p.active && hasStock(p)).length },
             { label: 'Sin stock', value: outOfStockCount, alert: outOfStockCount > 0 },
           ].map(s => (
             <div key={s.label} style={{ backgroundColor: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.07)', padding: '16px 20px' }}>
@@ -615,10 +545,9 @@ export function AdminPanel() {
           ))}
         </div>
 
-        {/* ── Product list ── */}
+        {/* Product list */}
         {activeTab === 'list' && (
           <div>
-            {/* Category filter pills */}
             <div className="flex flex-wrap gap-2 mb-8">
               {[null, ...CATEGORIES].map(cat => (
                 <button
@@ -654,7 +583,7 @@ export function AdminPanel() {
           </div>
         )}
 
-        {/* ── Add product form ── */}
+        {/* Add product form */}
         {activeTab === 'add' && (
           <form onSubmit={handleSubmit} className="max-w-xl flex flex-col gap-6">
 
@@ -687,7 +616,7 @@ export function AdminPanel() {
                 <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Categoría *</label>
                 <select
                   value={form.category}
-                  onChange={e => handleCategoryChange(e.target.value)}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                   style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '11px 14px', fontSize: '0.88rem', background: '#F5F0E8', color: '#1a1a1a', outline: 'none', cursor: 'pointer' }}
                 >
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -712,13 +641,33 @@ export function AdminPanel() {
               />
             </div>
 
+            {/* General stock (shown only when no variants) */}
+            {form.variants.length === 0 && (
+              <div>
+                <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">
+                  Stock general *
+                </label>
+                <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '8px' }}>
+                  Cantidad disponible del producto. Si agregás variantes abajo, el stock se maneja por variante.
+                </p>
+                <input
+                  type="number"
+                  value={form.generalStock}
+                  onChange={e => setForm(f => ({ ...f, generalStock: e.target.value }))}
+                  min={0}
+                  placeholder="10"
+                  style={{ width: '120px', border: '1px solid rgba(0,0,0,0.12)', padding: '11px 14px', fontSize: '0.88rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+                />
+              </div>
+            )}
+
             {/* Variants section */}
             <div>
               <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">
-                Stock por variante (opcional)
+                Variantes (tallas / medidas — opcional)
               </label>
               <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '12px' }}>
-                Si tu producto tiene variantes (tallas, medidas), agregalas aquí. Si no tiene variantes, dejá esta sección vacía.
+                Si tu producto tiene variantes, agregalas aquí y cada una tendrá su propio stock. Si no tiene variantes, dejá esta sección vacía y usá el stock general de arriba.
               </p>
               <VariantBuilder
                 variants={form.variants}
@@ -732,7 +681,7 @@ export function AdminPanel() {
                 Colores disponibles (opcional)
               </label>
               <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '12px' }}>
-                Si tenés el mismo producto en diferentes colores, podés agregar cada color con su foto específica. La foto principal será la que aparecerá en la grilla.
+                Si tenés el mismo producto en diferentes colores, podés agregar cada color con su foto específica.
               </p>
               <ColorBuilder
                 colors={form.colors}
@@ -762,7 +711,7 @@ export function AdminPanel() {
           </form>
         )}
 
-        {/* ── Carousel manager ── */}
+        {/* Carousel manager */}
         {activeTab === 'carousel' && <CarouselManager />}
       </div>
     </div>

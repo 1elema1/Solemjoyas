@@ -4,6 +4,15 @@ import { useStore, Product } from '../context/StoreContext';
 
 const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
 
+function hasVariants(product: Product): boolean {
+  return !!(product.variants && product.variants.length > 0);
+}
+
+function isSingleVariant(product: Product): boolean {
+  return !hasVariants(product) ||
+    (product.variants!.length === 1 && product.variants![0].label === 'Única');
+}
+
 function VariantSelector({
   product,
   selected,
@@ -13,9 +22,10 @@ function VariantSelector({
   selected: string | undefined;
   onChange: (v: string) => void;
 }) {
-  const hasMultiple = product.variants.length > 1;
-  const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
+  if (!hasVariants(product)) return null;
 
+  const variants = product.variants!;
+  const isSingle = variants.length === 1 && variants[0].label === 'Única';
   if (isSingle) return null;
 
   const getCategoryLabel = (cat: string) => {
@@ -31,7 +41,7 @@ function VariantSelector({
         {getCategoryLabel(product.category)}
       </p>
       <div className="flex flex-wrap gap-2">
-        {product.variants.map(v => {
+        {variants.map(v => {
           const outOfStock = v.stock === 0;
           const isSelected = selected === v.label;
           return (
@@ -58,7 +68,7 @@ function VariantSelector({
           );
         })}
       </div>
-      {!selected && hasMultiple && (
+      {!selected && variants.length > 1 && (
         <p style={{ color: '#c0392b', fontSize: '0.72rem', marginTop: '6px' }}>
           Seleccioná una medida para continuar
         </p>
@@ -69,9 +79,11 @@ function VariantSelector({
 
 function ProductDetailModal({ product, onClose }: { product: Product; onClose: () => void }) {
   const { addToCart, setCartOpen, getAvailableStock } = useStore();
-  const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
+  const noVariants = !hasVariants(product);
+  const single = isSingleVariant(product);
+
   const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
-    isSingle ? 'Única' : undefined
+    single ? (product.variants?.[0]?.label) : undefined
   );
   const [selectedColor, setSelectedColor] = useState<string | undefined>(
     product.colors && product.colors.length > 0 ? product.colors[0].color : undefined
@@ -79,18 +91,22 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
   const [added, setAdded] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const canAdd = isSingle || Boolean(selectedVariant);
+  const canAdd = noVariants || single || Boolean(selectedVariant);
 
   const displayImage = selectedColor && product.colors
     ? product.colors.find(c => c.color === selectedColor)?.image || product.image
     : product.image;
 
-  const totalStock = product.variants.reduce((s, v) => s + v.stock, 0);
+  const totalStock = hasVariants(product)
+    ? product.variants!.reduce((s, v) => s + v.stock, 0)
+    : (product.generalStock ?? 0);
+
+  const cartVariant = noVariants ? undefined : selectedVariant;
 
   const handleAdd = () => {
     if (!canAdd) return;
     setErrorMsg('');
-    const result = addToCart(product.id, selectedVariant);
+    const result = addToCart(product.id, cartVariant);
     if (result.success) {
       setAdded(true);
       setTimeout(() => setAdded(false), 1500);
@@ -103,7 +119,7 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
   const handleBuyNow = () => {
     if (!canAdd) return;
     setErrorMsg('');
-    const result = addToCart(product.id, selectedVariant);
+    const result = addToCart(product.id, cartVariant);
     if (result.success) {
       onClose();
       setCartOpen(true);
@@ -130,9 +146,13 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
         onClick={e => e.stopPropagation()}
       >
         <div className="grid md:grid-cols-2">
-          {/* Image */}
-          <div className="aspect-square overflow-hidden" style={{ minHeight: '300px', position: 'relative' }}>
-            <img src={displayImage} alt={product.name} className="w-full h-full object-cover" />
+          {/* Image — respects original proportions */}
+          <div className="relative overflow-hidden" style={{ minHeight: '280px' }}>
+            <img
+              src={displayImage}
+              alt={product.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            />
             {totalStock <= 3 && totalStock > 0 && (
               <div
                 style={{
@@ -284,12 +304,15 @@ function ProductCard({ product }: { product: Product }) {
   const { addToCart } = useStore();
   const [detail, setDetail] = useState(false);
 
-  const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
+  const single = isSingleVariant(product);
+  const noVariants = !hasVariants(product);
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isSingle) {
-      addToCart(product.id, 'Única');
+    if (noVariants) {
+      addToCart(product.id);
+    } else if (single) {
+      addToCart(product.id, product.variants![0].label);
     } else {
       setDetail(true);
     }
@@ -298,17 +321,15 @@ function ProductCard({ product }: { product: Product }) {
   return (
     <>
       <div className="group cursor-pointer" onClick={() => setDetail(true)}>
-        <div
-          className="relative overflow-hidden mb-4"
-          style={{ aspectRatio: '1/1', borderRadius: '1px' }}
-        >
+        {/* Image — preserves original proportions */}
+        <div className="relative overflow-hidden mb-4" style={{ borderRadius: '1px' }}>
           <img
             src={product.image}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }}
+            className="transition-transform duration-700 group-hover:scale-105"
           />
 
-          {/* Quick-add overlay */}
           <div
             style={{
               position: 'absolute',
@@ -336,7 +357,7 @@ function ProductCard({ product }: { product: Product }) {
               border: 'none',
             }}
           >
-            {isSingle ? 'Agregar al carrito' : 'Seleccionar medida'}
+            {single || noVariants ? 'Agregar al carrito' : 'Seleccionar medida'}
           </button>
         </div>
 
@@ -367,11 +388,11 @@ export function ProductGrid() {
     : clientProducts;
 
   if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase();
     filtered = filtered.filter(p =>
-      p.name.toLowerCase().includes(query) ||
-      p.description.toLowerCase().includes(query) ||
-      p.category.toLowerCase().includes(query)
+      p.name.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q)
     );
   }
 
@@ -450,7 +471,6 @@ export function ProductGrid() {
         )}
       </div>
 
-      {/* Footer */}
       <div style={{ backgroundColor: '#1a1a1a', padding: '32px' }}>
         <div className="max-w-7xl mx-auto text-center">
           <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', letterSpacing: '0.1em' }}>

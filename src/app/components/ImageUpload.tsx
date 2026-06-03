@@ -17,7 +17,7 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setError('Por favor selecciona una imagen válida');
+      setError('Por favor seleccioná una imagen válida');
       setTimeout(() => setError(''), 3000);
       return;
     }
@@ -25,20 +25,9 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-
-      // Validar que la imagen sea cuadrada
-      const img = new Image();
-      img.onload = () => {
-        if (img.width !== img.height) {
-          setError(`La imagen debe ser cuadrada. Esta imagen es ${img.width}x${img.height}. Por favor redimensionala a formato cuadrado.`);
-          setTimeout(() => setError(''), 5000);
-          return;
-        }
-        setPreview(dataUrl);
-        onChange(dataUrl);
-        setError('');
-      };
-      img.src = dataUrl;
+      setPreview(dataUrl);
+      onChange(dataUrl);
+      setError('');
     };
     reader.readAsDataURL(file);
   };
@@ -61,9 +50,6 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
       <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">
         {label}
       </label>
-      <p style={{ color: '#aaa', fontSize: '0.7rem', marginBottom: '8px' }}>
-        ⚠️ La imagen debe ser cuadrada (mismo ancho y alto)
-      </p>
 
       <div className="flex flex-col gap-3">
         <div className="flex gap-2">
@@ -71,7 +57,7 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
             type="url"
             value={value.startsWith('data:') ? '' : value}
             onChange={(e) => handleUrlChange(e.target.value)}
-            placeholder="https://... o sube una imagen cuadrada"
+            placeholder="https://… o subí una imagen"
             style={{
               flex: 1,
               border: '1px solid rgba(0,0,0,0.12)',
@@ -123,18 +109,19 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
         )}
 
         {preview && (
-          <div className="relative inline-block">
-            <div
-              className="overflow-hidden"
+          <div className="relative inline-block" style={{ maxWidth: '200px' }}>
+            <img
+              src={preview}
+              alt="Preview"
               style={{
-                width: '120px',
-                height: '120px',
-                borderRadius: '2px',
+                width: '100%',
+                height: 'auto',
+                display: 'block',
                 border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: '2px',
+                objectFit: 'contain',
               }}
-            >
-              <img src={preview} alt="Preview" className="w-full h-full object-cover" />
-            </div>
+            />
             <button
               type="button"
               onClick={handleClear}
