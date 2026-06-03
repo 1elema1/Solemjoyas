@@ -73,10 +73,19 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
   const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
     isSingle ? 'Única' : undefined
   );
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(
+    product.colors && product.colors.length > 0 ? product.colors[0].color : undefined
+  );
   const [added, setAdded] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const canAdd = isSingle || Boolean(selectedVariant);
+
+  const displayImage = selectedColor && product.colors
+    ? product.colors.find(c => c.color === selectedColor)?.image || product.image
+    : product.image;
+
+  const totalStock = product.variants.reduce((s, v) => s + v.stock, 0);
 
   const handleAdd = () => {
     if (!canAdd) return;
@@ -122,8 +131,25 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
       >
         <div className="grid md:grid-cols-2">
           {/* Image */}
-          <div className="aspect-square overflow-hidden" style={{ minHeight: '300px' }}>
-            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+          <div className="aspect-square overflow-hidden" style={{ minHeight: '300px', position: 'relative' }}>
+            <img src={displayImage} alt={product.name} className="w-full h-full object-cover" />
+            {totalStock <= 3 && totalStock > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  left: '10px',
+                  backgroundColor: 'rgba(245,240,232,0.9)',
+                  padding: '3px 8px',
+                  fontSize: '0.6rem',
+                  letterSpacing: '0.12em',
+                  color: '#c0392b',
+                }}
+                className="uppercase"
+              >
+                Últimas unidades
+              </div>
+            )}
           </div>
 
           {/* Info */}
@@ -157,6 +183,35 @@ function ProductDetailModal({ product, onClose }: { product: Product; onClose: (
             <p style={{ color: '#666', fontSize: '0.88rem', lineHeight: 1.75 }} className="mb-6 flex-1">
               {product.description}
             </p>
+
+            {/* Color Selector */}
+            {product.colors && product.colors.length > 0 && (
+              <div className="mb-5">
+                <p style={{ color: '#888', fontSize: '0.68rem', letterSpacing: '0.15em' }} className="uppercase mb-3">
+                  Color
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {product.colors.map(colorVariant => (
+                    <button
+                      key={colorVariant.color}
+                      onClick={() => setSelectedColor(colorVariant.color)}
+                      style={{
+                        padding: '7px 14px',
+                        fontSize: '0.78rem',
+                        letterSpacing: '0.06em',
+                        border: selectedColor === colorVariant.color ? '1px solid #6B8F71' : '1px solid rgba(0,0,0,0.15)',
+                        backgroundColor: selectedColor === colorVariant.color ? '#6B8F71' : 'transparent',
+                        color: selectedColor === colorVariant.color ? 'white' : '#1a1a1a',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {colorVariant.color}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <VariantSelector
               product={product}
@@ -230,7 +285,6 @@ function ProductCard({ product }: { product: Product }) {
   const [detail, setDetail] = useState(false);
 
   const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
-  const totalStock = product.variants.reduce((s, v) => s + v.stock, 0);
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -246,7 +300,7 @@ function ProductCard({ product }: { product: Product }) {
       <div className="group cursor-pointer" onClick={() => setDetail(true)}>
         <div
           className="relative overflow-hidden mb-4"
-          style={{ aspectRatio: '3/4', borderRadius: '1px' }}
+          style={{ aspectRatio: '1/1', borderRadius: '1px' }}
         >
           <img
             src={product.image}
@@ -284,24 +338,6 @@ function ProductCard({ product }: { product: Product }) {
           >
             {isSingle ? 'Agregar al carrito' : 'Seleccionar medida'}
           </button>
-
-          {totalStock <= 3 && totalStock > 0 && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '10px',
-                left: '10px',
-                backgroundColor: 'rgba(245,240,232,0.9)',
-                padding: '3px 8px',
-                fontSize: '0.6rem',
-                letterSpacing: '0.12em',
-                color: '#c0392b',
-              }}
-              className="uppercase"
-            >
-              Últimas unidades
-            </div>
-          )}
         </div>
 
         <div>

@@ -10,21 +10,35 @@ interface ImageUploadProps {
 export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string>(value);
+  const [error, setError] = useState<string>('');
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona una imagen válida');
+      setError('Por favor selecciona una imagen válida');
+      setTimeout(() => setError(''), 3000);
       return;
     }
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      setPreview(dataUrl);
-      onChange(dataUrl);
+
+      // Validar que la imagen sea cuadrada
+      const img = new Image();
+      img.onload = () => {
+        if (img.width !== img.height) {
+          setError(`La imagen debe ser cuadrada. Esta imagen es ${img.width}x${img.height}. Por favor redimensionala a formato cuadrado.`);
+          setTimeout(() => setError(''), 5000);
+          return;
+        }
+        setPreview(dataUrl);
+        onChange(dataUrl);
+        setError('');
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -47,6 +61,9 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
       <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">
         {label}
       </label>
+      <p style={{ color: '#aaa', fontSize: '0.7rem', marginBottom: '8px' }}>
+        ⚠️ La imagen debe ser cuadrada (mismo ancho y alto)
+      </p>
 
       <div className="flex flex-col gap-3">
         <div className="flex gap-2">
@@ -54,7 +71,7 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
             type="url"
             value={value.startsWith('data:') ? '' : value}
             onChange={(e) => handleUrlChange(e.target.value)}
-            placeholder="https://... o sube una imagen"
+            placeholder="https://... o sube una imagen cuadrada"
             style={{
               flex: 1,
               border: '1px solid rgba(0,0,0,0.12)',
@@ -94,6 +111,16 @@ export function ImageUpload({ value, onChange, label = 'Imagen' }: ImageUploadPr
           onChange={handleFileSelect}
           style={{ display: 'none' }}
         />
+
+        {error && (
+          <div style={{
+            backgroundColor: 'rgba(192,57,43,0.1)',
+            border: '1px solid rgba(192,57,43,0.3)',
+            padding: '10px 14px',
+          }}>
+            <p style={{ color: '#c0392b', fontSize: '0.75rem' }}>{error}</p>
+          </div>
+        )}
 
         {preview && (
           <div className="relative inline-block">

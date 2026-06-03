@@ -1,8 +1,31 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  Timestamp
+} from 'firebase/firestore';
+import {
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  User as FirebaseUser
+} from 'firebase/auth';
+import { db, auth } from '../config/firebase';
 
 export interface Variant {
   label: string;
   stock: number;
+}
+
+export interface ColorVariant {
+  color: string;
+  image: string;
 }
 
 export interface Product {
@@ -14,6 +37,7 @@ export interface Product {
   description: string;
   variants: Variant[];
   active: boolean;
+  colors?: ColorVariant[];
 }
 
 export interface CarouselSettings {
@@ -27,17 +51,16 @@ export interface CartItem {
 }
 
 export interface User {
-  name: string;
   email: string;
-  role: 'customer' | 'admin';
+  role: 'admin';
 }
 
 interface StoreContextType {
   products: Product[];
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  deleteProduct: (id: string) => void;
-  updateProduct: (id: string, updates: Partial<Omit<Product, 'id'>>) => void;
-  toggleActive: (id: string) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  updateProduct: (id: string, updates: Partial<Omit<Product, 'id'>>) => Promise<void>;
+  toggleActive: (id: string) => Promise<void>;
   clientProducts: Product[]; // only active + has stock
   cart: CartItem[];
   addToCart: (productId: string, variant?: string) => { success: boolean; message?: string };
@@ -48,28 +71,23 @@ interface StoreContextType {
   cartCount: number;
   cartOpen: boolean;
   setCartOpen: (v: boolean) => void;
-  loginOpen: boolean;
-  setLoginOpen: (v: boolean) => void;
   currentView: 'home' | 'products' | 'admin';
   setCurrentView: (v: 'home' | 'products' | 'admin') => void;
   selectedCategory: string | null;
   setSelectedCategory: (c: string | null) => void;
   user: User | null;
-  login: (email: string, password: string) => { success: boolean; message: string };
-  register: (name: string, email: string, password: string) => { success: boolean; message: string };
-  logout: () => void;
+  adminLogin: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+  adminLogout: () => Promise<void>;
   generateWhatsAppLink: () => string;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   carouselImages: string[];
   updateCarouselImages: (images: string[]) => void;
   getAvailableStock: (productId: string, variant?: string) => number;
+  loading: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
-
-const ADMIN_EMAIL = 'admin@solem.com';
-const ADMIN_PASSWORD = 'solem2025';
 
 const makeVariants = (labels: string[], stock = 5): Variant[] =>
   labels.map(label => ({ label, stock }));
@@ -126,45 +144,88 @@ const DEFAULT_CAROUSEL_IMAGES = [
 ];
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const stored = loadFromStorage<Product[]>('solem_products_v2', []);
-    return stored.length > 0 ? stored : INITIAL_PRODUCTS;
-  });
+  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage('solem_cart_v2', []));
-  const [user, setUser] = useState<User | null>(() => loadFromStorage('solem_user', null));
+  const [user, setUser] = useState<User | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'products' | 'admin'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [carouselImages, setCarouselImages] = useState<string[]>(() =>
     loadFromStorage('solem_carousel', DEFAULT_CAROUSEL_IMAGES)
   );
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { localStorage.setItem('solem_products_v2', JSON.stringify(products)); }, [products]);
-  useEffect(() => { localStorage.setItem('solem_cart_v2', JSON.stringify(cart)); }, [cart]);
+  // Escuchar cambios de autenticación de Firebase
   useEffect(() => {
-    if (user) localStorage.setItem('solem_user', JSON.stringify(user));
-    else localStorage.removeItem('solem_user');
-  }, [user]);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({ email: firebaseUser.email!, role: 'admin' });
+      } else {
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Suscribirse a productos en tiempo real desde Firestore
+  useEffect(() => {
+    setLoading(true);
+    const q = query(collection(db, 'products'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const productsData: Product[] = [];
+      snapshot.forEach((doc) => {
+        productsData.push({ id: doc.id, ...doc.data() } as Product);
+      });
+      setProducts(productsData);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error al cargar productos:', error);
+      // Si Firestore falla, cargar datos iniciales
+      setProducts(INITIAL_PRODUCTS);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => { localStorage.setItem('solem_cart_v2', JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
 
   const clientProducts = products.filter(p => p.active && hasStock(p));
 
-  const addProduct = (product: Omit<Product, 'id'>) => {
-    setProducts(prev => [...prev, { ...product, id: Date.now().toString() }]);
+  const addProduct = async (product: Omit<Product, 'id'>) => {
+    try {
+      await addDoc(collection(db, 'products'), product);
+    } catch (error) {
+      console.error('Error al agregar producto:', error);
+      throw error;
+    }
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
+  const deleteProduct = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'products', id));
+    } catch (error) {
+      console.error('Error al eliminar producto:', error);
+      throw error;
+    }
   };
 
-  const updateProduct = (id: string, updates: Partial<Omit<Product, 'id'>>) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+  const updateProduct = async (id: string, updates: Partial<Omit<Product, 'id'>>) => {
+    try {
+      await updateDoc(doc(db, 'products', id), updates as any);
+    } catch (error) {
+      console.error('Error al actualizar producto:', error);
+      throw error;
+    }
   };
 
-  const toggleActive = (id: string) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, active: !p.active } : p));
+  const toggleActive = async (id: string) => {
+    const product = products.find(p => p.id === id);
+    if (product) {
+      await updateProduct(id, { active: !product.active });
+    }
   };
 
   const getAvailableStock = (productId: string, variant?: string): number => {
@@ -246,29 +307,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const login = (email: string, password: string) => {
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      setUser({ name: 'Administrador', email, role: 'admin' });
-      return { success: true, message: 'Bienvenido' };
+  const adminLogin = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { success: true, message: 'Bienvenido, Administrador' };
+    } catch (error: any) {
+      console.error('Error en login:', error);
+      return { success: false, message: 'Email o contraseña incorrectos' };
     }
-    const customers: { name: string; email: string; password: string }[] = loadFromStorage('solem_customers', []);
-    const found = customers.find(c => c.email === email && c.password === password);
-    if (found) {
-      setUser({ name: found.name, email: found.email, role: 'customer' });
-      return { success: true, message: `Bienvenida, ${found.name}` };
-    }
-    return { success: false, message: 'Email o contraseña incorrectos' };
   };
 
-  const register = (name: string, email: string, password: string) => {
-    const customers: { name: string; email: string; password: string }[] = loadFromStorage('solem_customers', []);
-    if (customers.find(c => c.email === email)) return { success: false, message: 'Ya existe una cuenta con ese email' };
-    localStorage.setItem('solem_customers', JSON.stringify([...customers, { name, email, password }]));
-    setUser({ name, email, role: 'customer' });
-    return { success: true, message: `Bienvenida, ${name}` };
+  const adminLogout = async () => {
+    try {
+      await firebaseSignOut(auth);
+      setCurrentView('home');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
   };
-
-  const logout = () => { setUser(null); setCurrentView('home'); };
 
   const generateWhatsAppLink = () => {
     const number = '3516854262';
@@ -291,10 +347,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       products, addProduct, deleteProduct, updateProduct, toggleActive, clientProducts,
       cart, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, cartCount,
-      cartOpen, setCartOpen, loginOpen, setLoginOpen,
+      cartOpen, setCartOpen,
       currentView, setCurrentView, selectedCategory, setSelectedCategory,
-      user, login, register, logout, generateWhatsAppLink,
+      user, adminLogin, adminLogout, generateWhatsAppLink,
       searchQuery, setSearchQuery, carouselImages, updateCarouselImages, getAvailableStock,
+      loading,
     }}>
       {children}
     </StoreContext.Provider>

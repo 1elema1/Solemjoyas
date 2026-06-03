@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle, Image } from 'lucide-react';
-import { useStore, Product, Variant } from '../context/StoreContext';
+import { useStore, Product, Variant, ColorVariant } from '../context/StoreContext';
 import { ImageUpload } from './ImageUpload';
 
 const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
@@ -72,10 +72,14 @@ function AdminProductRow({ product }: { product: Product }) {
     setLocalVariants(prev => prev.map(v => v.label === label ? { ...v, stock: n } : v));
   };
 
-  const saveStock = () => {
-    updateProduct(product.id, { variants: localVariants });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const saveStock = async () => {
+    try {
+      await updateProduct(product.id, { variants: localVariants });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error('Error al guardar stock:', error);
+    }
   };
 
   const isSingle = product.variants.length === 1 && product.variants[0].label === 'Única';
@@ -300,6 +304,92 @@ function VariantBuilder({
   );
 }
 
+// ── Color builder inside add-product form ──────────────────────────────────────
+function ColorBuilder({
+  colors,
+  onChange,
+}: {
+  colors: ColorVariant[];
+  onChange: (c: ColorVariant[]) => void;
+}) {
+  const updateColor = (i: number, color: string) => {
+    const next = [...colors];
+    next[i] = { ...next[i], color };
+    onChange(next);
+  };
+  const updateImage = (i: number, image: string) => {
+    const next = [...colors];
+    next[i] = { ...next[i], image };
+    onChange(next);
+  };
+  const add = () => onChange([...colors, { color: '', image: '' }]);
+  const remove = (i: number) => onChange(colors.filter((_, idx) => idx !== i));
+
+  return (
+    <div>
+      <div className="flex flex-col gap-4 mb-3">
+        {colors.map((c, i) => (
+          <div key={i} style={{ border: '1px solid rgba(0,0,0,0.1)', padding: '12px' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="text"
+                value={c.color}
+                onChange={e => updateColor(i, e.target.value)}
+                placeholder="Nombre del color (ej: Plateado, Dorado)"
+                style={{
+                  flex: 1,
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  padding: '8px 12px',
+                  fontSize: '0.82rem',
+                  background: 'transparent',
+                  color: '#1a1a1a',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                style={{ color: '#ccc', background: 'none', border: 'none', cursor: 'pointer' }}
+                className="hover:text-red-400 transition-colors flex-shrink-0"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <ImageUpload
+              value={c.image}
+              onChange={(url) => updateImage(i, url)}
+              label={`Foto del producto en ${c.color || 'este color'} (cuadrada)`}
+            />
+            {c.image && (
+              <div className="mt-2">
+                <div style={{ width: '100px', height: '100px', border: '1px solid rgba(0,0,0,0.1)' }}>
+                  <img src={c.image} alt={c.color} className="w-full h-full object-cover" />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={add}
+        style={{
+          fontSize: '0.65rem',
+          letterSpacing: '0.12em',
+          color: '#6B8F71',
+          border: '1px dashed #6B8F71',
+          padding: '7px 14px',
+          background: 'none',
+          cursor: 'pointer',
+        }}
+        className="uppercase hover:bg-green-50/30 transition-colors"
+      >
+        + Agregar color
+      </button>
+    </div>
+  );
+}
+
 // ── Carousel Manager ───────────────────────────────────────────────────────────
 function CarouselManager() {
   const { carouselImages, updateCarouselImages } = useStore();
@@ -412,7 +502,7 @@ export function AdminPanel() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  const emptyForm = { name: '', price: '', category: 'Anillos', image: '', description: '', variants: [] as Variant[] };
+  const emptyForm = { name: '', price: '', category: 'Anillos', image: '', description: '', variants: [] as Variant[], colors: [] as ColorVariant[] };
   const [form, setForm] = useState(emptyForm);
 
   const handleCategoryChange = (cat: string) => {
@@ -422,7 +512,7 @@ export function AdminPanel() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!form.name.trim() || !form.price || !form.image.trim()) {
@@ -440,11 +530,18 @@ export function AdminPanel() {
       return;
     }
 
-    addProduct({ name: form.name, price, category: form.category, image: form.image, description: form.description, variants, active: true });
-    setSuccess(`"${form.name}" agregado.`);
-    setForm(emptyForm);
-    setTimeout(() => setSuccess(''), 3000);
-    setActiveTab('list');
+    const colors = form.colors.filter(c => c.color.trim() && c.image.trim());
+
+    try {
+      await addProduct({ name: form.name, price, category: form.category, image: form.image, description: form.description, variants, colors: colors.length > 0 ? colors : undefined, active: true });
+      setSuccess(`"${form.name}" agregado.`);
+      setForm(emptyForm);
+      setTimeout(() => setSuccess(''), 3000);
+      setActiveTab('list');
+    } catch (error) {
+      setError('Error al agregar producto');
+      console.error(error);
+    }
   };
 
   const filtered = filterCat ? products.filter(p => p.category === filterCat) : products;
@@ -626,6 +723,20 @@ export function AdminPanel() {
               <VariantBuilder
                 variants={form.variants}
                 onChange={v => setForm(f => ({ ...f, variants: v }))}
+              />
+            </div>
+
+            {/* Colors section */}
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">
+                Colores disponibles (opcional)
+              </label>
+              <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '12px' }}>
+                Si tenés el mismo producto en diferentes colores, podés agregar cada color con su foto específica. La foto principal será la que aparecerá en la grilla.
+              </p>
+              <ColorBuilder
+                colors={form.colors}
+                onChange={c => setForm(f => ({ ...f, colors: c }))}
               />
             </div>
 
