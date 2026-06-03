@@ -690,7 +690,8 @@ export function AdminPanel() {
             </div>
 
             {error && <p style={{ color: '#c0392b', fontSize: '0.8rem' }}>{error}</p>}
-            {success && <p style={{ color: '#6B8F71', fontSize: '0.8rem' }}>{success}</p>}
+            
+            {/* ¡OJO! Borramos la línea vieja de success que estaba acá */}
 
             <button
               type="submit"
@@ -713,6 +714,32 @@ export function AdminPanel() {
 
         {/* Carousel manager */}
         {activeTab === 'carousel' && <CarouselManager />}
+
+        {/* --- ACÁ EMPIEZA EL POPUP FLOTANTE --- */}
+        {success && (
+          <div style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            backgroundColor: '#1a1a1a',
+            color: '#F5F0E8',
+            padding: '16px 24px',
+            borderRadius: '4px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            zIndex: 9999,
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em'
+          }}>
+            <span style={{ color: '#6B8F71', fontSize: '1.2rem' }}>✓</span>
+            {success}
+          </div>
+        )}
+        {/* --- ACÁ TERMINA EL POPUP FLOTANTE --- */}
+
       </div>
     </div>
   );
