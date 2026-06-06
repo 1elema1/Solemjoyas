@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Minus, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Edit2 } from 'lucide-react';
 import { useStore, Product, Variant, ColorVariant, hasStock, CATEGORIES, getProductPrice } from '../context/StoreContext';
 import { ImageUpload } from './ImageUpload';
 
@@ -132,7 +132,7 @@ function ActiveToggle({ active, onChange }: { active: boolean; onChange: () => v
 }
 
 // ── Admin product row ─────────────────────────────────────────────────────────
-function AdminProductRow({ product }: { product: Product }) {
+function AdminProductRow({ product, onEdit }: { product: Product; onEdit: (p: Product) => void }) {
   const { toggleActive, updateProduct, deleteProduct } = useStore();
   const [expanded, setExpanded] = useState(false);
   const productHasVariants = !!(product.variants && product.variants.length > 0);
@@ -192,6 +192,9 @@ function AdminProductRow({ product }: { product: Product }) {
         </div>
 
         <div className="flex items-center gap-4 flex-shrink-0">
+          <button onClick={() => onEdit(product)} style={{ color: '#6B8F71', background: 'none', border: 'none', cursor: 'pointer' }} title="Editar producto" className="hover:opacity-60 transition-opacity">
+            <Edit2 size={15} />
+          </button>
           <ActiveToggle active={product.active} onChange={() => toggleActive(product.id)} />
           <button onClick={() => setExpanded(v => !v)} style={{ color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -345,6 +348,314 @@ function ColorBuilder({ colors, onChange }: { colors: ColorVariant[]; onChange: 
   );
 }
 
+// ── Home content manager ──────────────────────────────────────────────────────
+function HomeContentManager() {
+  const { homeContent, updateHomeContent, carouselImages } = useStore();
+  const [form, setForm] = useState(homeContent);
+  const [saved, setSaved] = useState(false);
+  const [activeSection, setActiveSection] = useState<'hero' | 'categories' | 'footer'>('hero');
+
+  const handleSave = async () => {
+    try {
+      await updateHomeContent(form);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      console.error('Error al guardar contenido del home:', e);
+    }
+  };
+
+  const updateCategoryImage = (category: string, url: string) => {
+    setForm(prev => ({
+      ...prev,
+      categoryImages: { ...prev.categoryImages, [category]: url }
+    }));
+  };
+
+  return (
+    <div>
+      <h3 style={{ fontFamily: '"Cormorant Garamond","Georgia",serif', fontSize: '1.6rem', color: '#1a1a1a', fontWeight: 300, marginBottom: '16px' }}>
+        Contenido del Home
+      </h3>
+
+      {/* Section tabs */}
+      <div className="flex gap-4 mb-8" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '12px' }}>
+        {[
+          { id: 'hero', label: 'Hero' },
+          { id: 'categories', label: 'Categorías' },
+          { id: 'footer', label: 'Footer' },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setActiveSection(id as any)}
+            style={{
+              fontSize: '0.68rem', letterSpacing: '0.12em',
+              color: activeSection === id ? '#6B8F71' : '#888',
+              background: 'none', border: 'none',
+              borderBottom: activeSection === id ? '2px solid #6B8F71' : '2px solid transparent',
+              paddingBottom: '8px', cursor: 'pointer',
+            }}
+            className="uppercase"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="max-w-2xl">
+        {activeSection === 'hero' && (
+          <div className="flex flex-col gap-6">
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Imagen principal del hero</label>
+              <ImageUpload value={form.heroImage} onChange={url => setForm(f => ({ ...f, heroImage: url }))} label="Cambiar imagen" />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Tagline (texto superior pequeño)</label>
+              <input
+                type="text"
+                value={form.heroTagline}
+                onChange={e => setForm(f => ({ ...f, heroTagline: e.target.value }))}
+                placeholder="Plata 925"
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">
+                Título principal
+              </label>
+              <p style={{ color: '#aaa', fontSize: '0.7rem', marginBottom: '8px' }}>
+                Usá * para marcar palabras en itálica y cursiva. Ej: "Joyas que *brillan* con calma"
+              </p>
+              <textarea
+                value={form.heroTitle}
+                onChange={e => setForm(f => ({ ...f, heroTitle: e.target.value }))}
+                placeholder="Joyas que\n*brillan*\ncon calma."
+                rows={3}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Descripción</label>
+              <textarea
+                value={form.heroDescription}
+                onChange={e => setForm(f => ({ ...f, heroDescription: e.target.value }))}
+                placeholder="Piezas únicas en plata 925..."
+                rows={3}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Texto botón 1</label>
+                <input
+                  type="text"
+                  value={form.heroButton1Text}
+                  onChange={e => setForm(f => ({ ...f, heroButton1Text: e.target.value }))}
+                  placeholder="Explorar tienda →"
+                  style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Texto botón 2</label>
+                <input
+                  type="text"
+                  value={form.heroButton2Text}
+                  onChange={e => setForm(f => ({ ...f, heroButton2Text: e.target.value }))}
+                  placeholder="Ver cadenas"
+                  style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Categoría del botón 2</label>
+              <select
+                value={form.heroButton2Category}
+                onChange={e => setForm(f => ({ ...f, heroButton2Category: e.target.value }))}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: '#F5F0E8', color: '#1a1a1a', outline: 'none', cursor: 'pointer' }}
+              >
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Tag "Nueva colección"</label>
+                <input
+                  type="text"
+                  value={form.heroNewCollectionTag}
+                  onChange={e => setForm(f => ({ ...f, heroNewCollectionTag: e.target.value }))}
+                  placeholder="Nueva colección"
+                  style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Texto tag</label>
+                <input
+                  type="text"
+                  value={form.heroNewCollectionText}
+                  onChange={e => setForm(f => ({ ...f, heroNewCollectionText: e.target.value }))}
+                  placeholder="Joyas para siempre"
+                  style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'categories' && (
+          <div className="flex flex-col gap-6">
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Título de sección</label>
+              <input
+                type="text"
+                value={form.categoriesTitle}
+                onChange={e => setForm(f => ({ ...f, categoriesTitle: e.target.value }))}
+                placeholder="Colecciones"
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Subtítulo</label>
+              <input
+                type="text"
+                value={form.categoriesSubtitle}
+                onChange={e => setForm(f => ({ ...f, categoriesSubtitle: e.target.value }))}
+                placeholder="Explorá nuestras categorías"
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-3">Imágenes de portada por categoría</label>
+              <div className="flex flex-col gap-4">
+                {Object.keys(form.categoryImages).map(cat => (
+                  <div key={cat} style={{ border: '1px solid rgba(0,0,0,0.1)', padding: '12px' }}>
+                    <p style={{ color: '#555', fontSize: '0.8rem', marginBottom: '8px', fontWeight: 500 }}>{cat}</p>
+                    <ImageUpload
+                      value={form.categoryImages[cat]}
+                      onChange={url => updateCategoryImage(cat, url)}
+                      label={`Cambiar imagen de ${cat}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Título carrusel</label>
+              <input
+                type="text"
+                value={form.carouselTitle}
+                onChange={e => setForm(f => ({ ...f, carouselTitle: e.target.value }))}
+                placeholder="Inspiración"
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Subtítulo carrusel</label>
+              <input
+                type="text"
+                value={form.carouselSubtitle}
+                onChange={e => setForm(f => ({ ...f, carouselSubtitle: e.target.value }))}
+                placeholder="Descubrí nuestras piezas"
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'footer' && (
+          <div className="flex flex-col gap-6">
+            <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '-8px' }}>
+              Usá saltos de línea para separar el texto en dos líneas
+            </p>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Ubicación</label>
+              <textarea
+                value={form.footerLocation}
+                onChange={e => setForm(f => ({ ...f, footerLocation: e.target.value }))}
+                placeholder="Ubicados en&#10;Córdoba Capital"
+                rows={2}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Envíos</label>
+              <textarea
+                value={form.footerShipping}
+                onChange={e => setForm(f => ({ ...f, footerShipping: e.target.value }))}
+                placeholder="Realizamos envíos&#10;mediante Uber Envíos"
+                rows={2}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Material</label>
+              <textarea
+                value={form.footerMaterial}
+                onChange={e => setForm(f => ({ ...f, footerMaterial: e.target.value }))}
+                placeholder="Plata 925&#10;certificada y garantizada"
+                rows={2}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Pedidos</label>
+              <textarea
+                value={form.footerOrders}
+                onChange={e => setForm(f => ({ ...f, footerOrders: e.target.value }))}
+                placeholder="Coordinados por WhatsApp&#10;Sin pagos en línea"
+                rows={2}
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Copyright</label>
+              <input
+                type="text"
+                value={form.footerCopyright}
+                onChange={e => setForm(f => ({ ...f, footerCopyright: e.target.value }))}
+                placeholder="© 2025 SOLEM · Todos los derechos reservados"
+                style={{ width: '100%', border: '1px solid rgba(0,0,0,0.12)', padding: '10px 12px', fontSize: '0.85rem', background: 'transparent', color: '#1a1a1a', outline: 'none' }}
+              />
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          style={{
+            backgroundColor: saved ? '#6B8F71' : '#1a1a1a',
+            color: 'white',
+            fontSize: '0.68rem',
+            letterSpacing: '0.15em',
+            padding: '14px 28px',
+            border: 'none',
+            cursor: 'pointer',
+            marginTop: '24px',
+            transition: 'background-color 0.3s',
+          }}
+          className="uppercase"
+        >
+          {saved ? '✓ Guardado' : 'Guardar cambios'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Carousel manager ──────────────────────────────────────────────────────────
 function CarouselManager() {
   const { carouselImages, updateCarouselImages } = useStore();
@@ -381,11 +692,12 @@ function CarouselManager() {
 // ── Main AdminPanel ───────────────────────────────────────────────────────────
 export function AdminPanel() {
   const navigate = useNavigate();
-  const { products, addProduct } = useStore();
-  const [activeTab, setActiveTab] = useState<'list' | 'add' | 'carousel'>('list');
+  const { products, addProduct, updateProduct } = useStore();
+  const [activeTab, setActiveTab] = useState<'list' | 'add' | 'edit' | 'carousel' | 'home'>('list');
   const [filterCat, setFilterCat] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const emptyForm = {
     name: '',
@@ -398,6 +710,29 @@ export function AdminPanel() {
     generalStock: '10',
   };
   const [form, setForm] = useState(emptyForm);
+
+  const startEdit = (product: Product) => {
+    setEditingProduct(product);
+    setForm({
+      name: product.name,
+      price: product.price.toString(),
+      category: product.category,
+      images: product.images || [product.image],
+      description: product.description || '',
+      variants: product.variants || [],
+      colors: product.colors || [],
+      generalStock: (product.generalStock ?? 10).toString(),
+    });
+    setActiveTab('edit');
+    setError('');
+  };
+
+  const cancelEdit = () => {
+    setEditingProduct(null);
+    setForm(emptyForm);
+    setActiveTab('list');
+    setError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -412,12 +747,11 @@ export function AdminPanel() {
 
     const colors = form.colors.filter(c => c.color.trim() && c.image.trim());
 
-    // Build base product data — always clean undefined before sending to Firestore
-    const baseData: Omit<Product, 'id'> = {
+    const baseData: Partial<Omit<Product, 'id'>> = {
       name: form.name.trim(),
       price,
       category: form.category,
-      image: form.images[0],   // primary image kept for compat
+      image: form.images[0],
       images: form.images,
       description: form.description.trim(),
       active: true,
@@ -429,7 +763,6 @@ export function AdminPanel() {
         setError('Completá todas las etiquetas de variantes');
         return;
       }
-      // strip undefined price fields
       const cleanVariants = form.variants.map(v => {
         const cv: Variant = { label: v.label, stock: v.stock };
         if (v.price != null && v.price > 0) cv.price = v.price;
@@ -441,13 +774,19 @@ export function AdminPanel() {
     }
 
     try {
-      await addProduct(baseData);
-      setToast(`"${form.name}" publicado exitosamente`);
-      setForm(emptyForm);
-      setActiveTab('list');
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, baseData);
+        setToast(`"${form.name}" actualizado exitosamente`);
+        cancelEdit();
+      } else {
+        await addProduct(baseData as Omit<Product, 'id'>);
+        setToast(`"${form.name}" publicado exitosamente`);
+        setForm(emptyForm);
+        setActiveTab('list');
+      }
     } catch (err) {
       console.error(err);
-      setError('Error al agregar producto. Revisá la consola.');
+      setError('Error al guardar producto. Revisá la consola.');
     }
   };
 
@@ -494,10 +833,13 @@ export function AdminPanel() {
 
           {/* Tabs */}
           <div style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }} className="flex gap-8 mb-10">
-            {([['list', `Productos (${products.length})`], ['add', 'Agregar producto'], ['carousel', 'Carrusel']] as const).map(([tab, label]) => (
+            {([['list', `Productos (${products.length})`], ['add', 'Agregar producto'], ['home', 'Contenido Home'], ['carousel', 'Carrusel']] as const).map(([tab, label]) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  if (tab !== 'edit') setActiveTab(tab);
+                  if (tab === 'list' || tab === 'add') cancelEdit();
+                }}
                 style={{
                   fontSize: '0.68rem', letterSpacing: '0.15em',
                   color: activeTab === tab ? '#6B8F71' : '#888',
@@ -510,6 +852,19 @@ export function AdminPanel() {
                 {label}
               </button>
             ))}
+            {activeTab === 'edit' && (
+              <div
+                style={{
+                  fontSize: '0.68rem', letterSpacing: '0.15em',
+                  color: '#6B8F71',
+                  borderBottom: '2px solid #6B8F71',
+                  paddingBottom: '14px',
+                }}
+                className="uppercase"
+              >
+                Editar producto
+              </div>
+            )}
           </div>
 
           {/* ── Product list ── */}
@@ -540,14 +895,22 @@ export function AdminPanel() {
                   <p style={{ color: '#aaa', fontSize: '0.88rem' }}>No hay productos en esta categoría.</p>
                 </div>
               ) : (
-                <div>{filtered.map(p => <AdminProductRow key={p.id} product={p} />)}</div>
+                <div>{filtered.map(p => <AdminProductRow key={p.id} product={p} onEdit={startEdit} />)}</div>
               )}
             </div>
           )}
 
-          {/* ── Add product form ── */}
-          {activeTab === 'add' && (
+          {/* ── Add / Edit product form ── */}
+          {(activeTab === 'add' || activeTab === 'edit') && (
             <form onSubmit={handleSubmit} className="max-w-xl flex flex-col gap-6">
+              {activeTab === 'edit' && (
+                <div className="flex items-center justify-between mb-2">
+                  <p style={{ color: '#6B8F71', fontSize: '0.85rem' }}>Editando: {editingProduct?.name}</p>
+                  <button type="button" onClick={cancelEdit} style={{ color: '#888', fontSize: '0.68rem', letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }} className="uppercase hover:opacity-60">
+                    Cancelar
+                  </button>
+                </div>
+              )}
 
               <div>
                 <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-2">Nombre *</label>
@@ -581,7 +944,6 @@ export function AdminPanel() {
                 </div>
               </div>
 
-              {/* Multiple images */}
               <div>
                 <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">Fotos del producto *</label>
                 <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '10px' }}>
@@ -601,7 +963,6 @@ export function AdminPanel() {
                 />
               </div>
 
-              {/* General stock — only when no variants */}
               {form.variants.length === 0 && (
                 <div>
                   <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">Stock general *</label>
@@ -616,7 +977,6 @@ export function AdminPanel() {
                 </div>
               )}
 
-              {/* Variants with optional price */}
               <div>
                 <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">
                   Variantes (tallas / medidas — opcional)
@@ -627,7 +987,6 @@ export function AdminPanel() {
                 <VariantBuilder variants={form.variants} onChange={v => setForm(f => ({ ...f, variants: v }))} />
               </div>
 
-              {/* Colors */}
               <div>
                 <label style={{ color: '#888', fontSize: '0.65rem', letterSpacing: '0.15em' }} className="uppercase block mb-1">Colores disponibles (opcional)</label>
                 <p style={{ color: '#aaa', fontSize: '0.72rem', marginBottom: '12px' }}>
@@ -638,15 +997,37 @@ export function AdminPanel() {
 
               {error && <p style={{ color: '#c0392b', fontSize: '0.8rem' }}>{error}</p>}
 
-              <button
-                type="submit"
-                style={{ backgroundColor: '#1a1a1a', color: '#F5F0E8', fontSize: '0.68rem', letterSpacing: '0.2em', padding: '15px', border: 'none', cursor: 'pointer', marginTop: '4px' }}
-                className="uppercase flex items-center justify-center gap-2 hover:bg-black/80 transition-colors"
-              >
-                <Plus size={13} /> Publicar producto
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  style={{ backgroundColor: '#1a1a1a', color: '#F5F0E8', fontSize: '0.68rem', letterSpacing: '0.2em', padding: '15px', border: 'none', cursor: 'pointer', flex: 1 }}
+                  className="uppercase flex items-center justify-center gap-2 hover:bg-black/80 transition-colors"
+                >
+                  {activeTab === 'edit' ? (
+                    <>
+                      <CheckCircle2 size={13} /> Actualizar producto
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={13} /> Publicar producto
+                    </>
+                  )}
+                </button>
+                {activeTab === 'edit' && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    style={{ border: '1px solid rgba(0,0,0,0.25)', color: '#1a1a1a', fontSize: '0.68rem', letterSpacing: '0.2em', padding: '15px 24px', backgroundColor: 'transparent', cursor: 'pointer' }}
+                    className="uppercase hover:bg-black/5 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             </form>
           )}
+
+          {activeTab === 'home' && <HomeContentManager />}
 
           {activeTab === 'carousel' && <CarouselManager />}
         </div>

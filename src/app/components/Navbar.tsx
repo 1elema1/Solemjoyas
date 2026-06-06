@@ -4,7 +4,7 @@ import logo from '../../imports/Photoroom_20250815_205827.PNG';
 import { useState } from 'react';
 import { SearchBar } from './SearchBar';
 
-const CATEGORIES = ['Anillos', 'Collares', 'Pulseras', 'Dijes', 'Aros', 'Abridores', 'Argollas'];
+const CATEGORIES = ['Anillos', 'Cadenas', 'Pulseras', 'Dijes', 'Huggies', 'Abridores', 'Argollas', 'Conjuntos'];
 
 export function Navbar() {
   const {

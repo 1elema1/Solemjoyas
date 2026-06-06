@@ -64,6 +64,28 @@ export interface User {
   role: 'admin';
 }
 
+export interface HomeContent {
+  heroImage: string;
+  heroTagline: string;
+  heroTitle: string;
+  heroDescription: string;
+  heroButton1Text: string;
+  heroButton2Text: string;
+  heroButton2Category: string;
+  heroNewCollectionTag: string;
+  heroNewCollectionText: string;
+  categoriesTitle: string;
+  categoriesSubtitle: string;
+  categoryImages: Record<string, string>;
+  carouselTitle: string;
+  carouselSubtitle: string;
+  footerLocation: string;
+  footerShipping: string;
+  footerMaterial: string;
+  footerOrders: string;
+  footerCopyright: string;
+}
+
 interface StoreContextType {
   products: Product[];
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
@@ -95,6 +117,8 @@ interface StoreContextType {
   getAvailableStock: (productId: string, variant?: string) => number;
   getEffectivePrice: (productId: string, variant?: string) => number;
   loading: boolean;
+  homeContent: HomeContent;
+  updateHomeContent: (content: Partial<HomeContent>) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -130,6 +154,37 @@ const DEFAULT_CAROUSEL_IMAGES = [
   'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800',
 ];
 
+const DEFAULT_HOME_CONTENT: HomeContent = {
+  heroImage: 'https://images.unsplash.com/photo-1589674781759-c21c37956a44?w=900&q=80',
+  heroTagline: 'Plata 925',
+  heroTitle: 'Joyas que brillan con calma.',
+  heroDescription: 'Piezas únicas en plata 925, diseñadas y creadas a mano en Córdoba. Sutiles, atemporales, hechas para acompañarte.',
+  heroButton1Text: 'Explorar tienda →',
+  heroButton2Text: 'Ver cadenas',
+  heroButton2Category: 'Cadenas',
+  heroNewCollectionTag: 'Nueva colección',
+  heroNewCollectionText: 'Joyas para siempre',
+  categoriesTitle: 'Colecciones',
+  categoriesSubtitle: 'Explorá nuestras categorías',
+  categoryImages: {
+    Anillos: 'https://images.unsplash.com/photo-1589674781759-c21c37956a44?w=500&q=80',
+    Cadenas: 'https://images.unsplash.com/photo-1589128777073-263566ae5e4d?w=500&q=80',
+    Pulseras: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=500&q=80',
+    Dijes: 'https://images.unsplash.com/photo-1511253819057-5408d4d70465?w=500&q=80',
+    Huggies: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=500&q=80',
+    Abridores: 'https://images.unsplash.com/photo-1693212793204-bcea856c75fe?w=500&q=80',
+    Argollas: 'https://images.unsplash.com/photo-1629224316810-9d8805b95e76?w=500&q=80',
+    Conjuntos: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=500&q=80',
+  },
+  carouselTitle: 'Inspiración',
+  carouselSubtitle: 'Descubrí nuestras piezas',
+  footerLocation: 'Ubicados en\nCórdoba Capital',
+  footerShipping: 'Realizamos envíos\nmediante Uber Envíos',
+  footerMaterial: 'Plata 925\ncertificada y garantizada',
+  footerOrders: 'Coordinados por WhatsApp\nSin pagos en línea',
+  footerCopyright: '© 2025 SOLEM · Todos los derechos reservados',
+};
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage('solem_cart_v2', []));
@@ -142,6 +197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     loadFromStorage('solem_carousel', DEFAULT_CAROUSEL_IMAGES)
   );
   const [loading, setLoading] = useState(true);
+  const [homeContent, setHomeContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -175,6 +231,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { localStorage.setItem('solem_cart_v2', JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
+
+  // Sync homeContent from Firestore
+  useEffect(() => {
+    const homeDocRef = doc(db, 'settings', 'homeContent');
+    const unsubscribe = onSnapshot(
+      homeDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setHomeContent({ ...DEFAULT_HOME_CONTENT, ...docSnap.data() } as HomeContent);
+        } else {
+          setHomeContent(DEFAULT_HOME_CONTENT);
+        }
+      },
+      (error) => {
+        console.error('Error al cargar contenido del home:', error);
+        setHomeContent(DEFAULT_HOME_CONTENT);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   const clientProducts = products.filter(p => p.active && hasStock(p));
 
@@ -303,6 +379,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateCarouselImages = (images: string[]) => setCarouselImages(images);
 
+  const updateHomeContent = async (updates: Partial<HomeContent>) => {
+    const homeDocRef = doc(db, 'settings', 'homeContent');
+    const clean = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    );
+    await updateDoc(homeDocRef, clean).catch(async () => {
+      // If doc doesn't exist, create it with setDoc
+      const { setDoc } = await import('firebase/firestore');
+      await setDoc(homeDocRef, { ...DEFAULT_HOME_CONTENT, ...clean });
+    });
+  };
+
   return (
     <StoreContext.Provider value={{
       products, addProduct, deleteProduct, updateProduct, toggleActive, clientProducts,
@@ -313,6 +401,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       searchQuery, setSearchQuery, carouselImages, updateCarouselImages,
       getAvailableStock, getEffectivePrice,
       loading,
+      homeContent, updateHomeContent,
     }}>
       {children}
     </StoreContext.Provider>
