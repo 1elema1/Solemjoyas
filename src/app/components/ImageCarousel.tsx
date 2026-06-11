@@ -37,7 +37,9 @@ export function ImageCarousel({ images }: ImageCarouselProps) {
             <img
               src={img}
               alt={`Carousel ${idx + 1}`}
+              loading="lazy"
               className="w-full h-full object-cover"
+              style={{ display: 'block' }}
             />
           </div>
         ))}
