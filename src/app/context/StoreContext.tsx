@@ -186,7 +186,7 @@ const DEFAULT_HOME_CONTENT: HomeContent = {
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => loadFromStorage('solem_products_cache', []));
   const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage('solem_cart_v2', []));
   const [user, setUser] = useState<User | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -212,25 +212,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Real-time sync from Firestore — no local mock fallback
   useEffect(() => {
-    setLoading(true);
-    const q = query(collection(db, 'products'));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const productsData: Product[] = snapshot.docs.map(
-          (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product)
-        );
-        setProducts(productsData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error al cargar productos desde Firestore:', error);
-        setProducts([]);
-        setLoading(false);
-      }
+  const q = query(collection(db, 'products'));
+  
+  // Suscripción a Firebase
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const productsData: Product[] = snapshot.docs.map(
+      (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product)
     );
-    return () => unsubscribe();
-  }, []);
+    setProducts(productsData);
+    setLoading(false);
+    // Guardamos en caché cada vez que Firebase actualice
+    localStorage.setItem('solem_products_cache', JSON.stringify(productsData));
+  });
+
+  return () => unsubscribe();
+}, []);
 
   useEffect(() => { localStorage.setItem('solem_cart_v2', JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
