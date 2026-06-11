@@ -197,6 +197,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [currentView, setCurrentView] = useState<'home' | 'products' | 'admin'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [carouselImages, setCarouselImages] = useState<string[]>(() =>
+    loadFromStorage('solem_carousel', DEFAULT_CAROUSEL_IMAGES)
+  );
   //////////////
   const updateCarouselImages = async (images: string[]) => {
   setCarouselImages(images); // Actualiza localmente
