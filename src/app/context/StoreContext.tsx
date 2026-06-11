@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
 import {
   collection,
   doc,
@@ -196,9 +197,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [currentView, setCurrentView] = useState<'home' | 'products' | 'admin'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [carouselImages, setCarouselImages] = useState<string[]>(() =>
-    loadFromStorage('solem_carousel', DEFAULT_CAROUSEL_IMAGES)
-  );
+  //////////////
+  const updateCarouselImages = async (images: string[]) => {
+  setCarouselImages(images); // Actualiza localmente
+  localStorage.setItem('solem_carousel', JSON.stringify(images)); // Caché local
+  
+  // AHORA: Sincroniza con Firebase para que todos vean lo mismo
+  try {
+    const homeDocRef = doc(db, 'settings', 'homeContent');
+    await updateDoc(homeDocRef, { carouselImages: images });
+  } catch (error) {
+    console.error("Error guardando carrusel en Firebase:", error);
+  }
+};
+  /////////////
   const [loading, setLoading] = useState(true);
   const [homeContent, setHomeContent] = useState<HomeContent>(() => {
     const cached = localStorage.getItem('solem_home_cache');
@@ -235,18 +247,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
 
   // Sync homeContent from Firestore
+  /////////
   useEffect(() => {
   const homeDocRef = doc(db, 'settings', 'homeContent');
   const unsubscribe = onSnapshot(homeDocRef, (docSnap) => {
     if (docSnap.exists()) {
       const data = docSnap.data() as HomeContent;
       setHomeContent(data);
-      // Guardamos la última versión en el navegador
+      // Si Firebase tiene imágenes de carrusel, usalas y actualiza el estado
+      if (data.carouselImages) {
+        setCarouselImages(data.carouselImages);
+      }
       localStorage.setItem('solem_home_cache', JSON.stringify(data)); 
     }
   });
   return () => unsubscribe();
 }, []);
+  //////////
 
   const clientProducts = products.filter(p => p.active && hasStock(p));
 
