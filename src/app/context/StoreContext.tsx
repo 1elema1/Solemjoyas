@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
 import {
   collection,
   doc,
@@ -150,13 +149,13 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 }
 
 const DEFAULT_CAROUSEL_IMAGES = [
-  '',
-  '',
-  '',
+  'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800',
+  'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=800',
+  'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800',
 ];
 
 const DEFAULT_HOME_CONTENT: HomeContent = {
-  heroImage: '',
+  heroImage: 'https://images.unsplash.com/photo-1589674781759-c21c37956a44?w=900&q=80',
   heroTagline: 'Plata 925',
   heroTitle: 'Joyas que brillan con calma.',
   heroDescription: 'Piezas únicas en plata 925, diseñadas y creadas a mano en Córdoba. Sutiles, atemporales, hechas para acompañarte.',
@@ -168,14 +167,14 @@ const DEFAULT_HOME_CONTENT: HomeContent = {
   categoriesTitle: 'Colecciones',
   categoriesSubtitle: 'Explorá nuestras categorías',
   categoryImages: {
-    Anillos: '',
-    Cadenas: '',
-    Pulseras: '',
-    Dijes: '',
-    Huggies: '',
-    Abridores: '',
-    Argollas: '',
-    Conjuntos: '',
+    Anillos: 'https://images.unsplash.com/photo-1589674781759-c21c37956a44?w=500&q=80',
+    Cadenas: 'https://images.unsplash.com/photo-1589128777073-263566ae5e4d?w=500&q=80',
+    Pulseras: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=500&q=80',
+    Dijes: 'https://images.unsplash.com/photo-1511253819057-5408d4d70465?w=500&q=80',
+    Huggies: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=500&q=80',
+    Abridores: 'https://images.unsplash.com/photo-1693212793204-bcea856c75fe?w=500&q=80',
+    Argollas: 'https://images.unsplash.com/photo-1629224316810-9d8805b95e76?w=500&q=80',
+    Conjuntos: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=500&q=80',
   },
   carouselTitle: 'Inspiración',
   carouselSubtitle: 'Descubrí nuestras piezas',
@@ -187,10 +186,7 @@ const DEFAULT_HOME_CONTENT: HomeContent = {
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(() => {
-  const cached = localStorage.getItem('solem_products_cache');
-  return cached ? JSON.parse(cached) : [];
-});
+  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage('solem_cart_v2', []));
   const [user, setUser] = useState<User | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -200,25 +196,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [carouselImages, setCarouselImages] = useState<string[]>(() =>
     loadFromStorage('solem_carousel', DEFAULT_CAROUSEL_IMAGES)
   );
-  //////////////
-  const updateCarouselImages = async (images: string[]) => {
-  setCarouselImages(images); // Actualiza localmente
-  localStorage.setItem('solem_carousel', JSON.stringify(images)); // Caché local
-  
-  // AHORA: Sincroniza con Firebase para que todos vean lo mismo
-  try {
-    const homeDocRef = doc(db, 'settings', 'homeContent');
-    await updateDoc(homeDocRef, { carouselImages: images });
-  } catch (error) {
-    console.error("Error guardando carrusel en Firebase:", error);
-  }
-};
-  /////////////
   const [loading, setLoading] = useState(true);
-  const [homeContent, setHomeContent] = useState<HomeContent>(() => {
-    const cached = localStorage.getItem('solem_home_cache');
-    return cached ? JSON.parse(cached) : DEFAULT_HOME_CONTENT;
-  });
+  const [homeContent, setHomeContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
+  const isFullyLoaded = !loading && homeLoaded;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -230,43 +210,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Real-time sync from Firestore — no local mock fallback
   useEffect(() => {
-  const q = query(collection(db, 'products'));
-  
-  // Suscripción a Firebase
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const productsData: Product[] = snapshot.docs.map(
-      (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product)
+    setLoading(true);
+    const q = query(collection(db, 'products'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const productsData: Product[] = snapshot.docs.map(
+          (docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product)
+        );
+        setProducts(productsData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error al cargar productos desde Firestore:', error);
+        setProducts([]);
+        setLoading(false);
+      }
     );
-    setProducts(productsData);
-    setLoading(false);
-    // Guardamos en caché cada vez que Firebase actualice
-    localStorage.setItem('solem_products_cache', JSON.stringify(productsData));
-  });
-
-  return () => unsubscribe();
-}, []);
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => { localStorage.setItem('solem_cart_v2', JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
 
   // Sync homeContent from Firestore
-  /////////
+  const [homeLoaded, setHomeLoaded] = useState(false);
+
+  // Sync homeContent from Firestore
   useEffect(() => {
-  const homeDocRef = doc(db, 'settings', 'homeContent');
-  const unsubscribe = onSnapshot(homeDocRef, (docSnap) => {
-    if (docSnap.exists()) {
-      const data = docSnap.data() as HomeContent;
-      setHomeContent(data);
-      // Si Firebase tiene imágenes de carrusel, usalas y actualiza el estado
-      if (data.carouselImages) {
-        setCarouselImages(data.carouselImages);
+    const homeDocRef = doc(db, 'settings', 'homeContent');
+    const unsubscribe = onSnapshot(
+      homeDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setHomeContent({ ...DEFAULT_HOME_CONTENT, ...docSnap.data() } as HomeContent);
+        } else {
+          setHomeContent(DEFAULT_HOME_CONTENT);
+        }
+        setHomeLoaded(true); // <--- Agregamos esto
+      },
+      (error) => {
+        console.error('Error al cargar contenido del home:', error);
+        setHomeContent(DEFAULT_HOME_CONTENT);
       }
-      localStorage.setItem('solem_home_cache', JSON.stringify(data)); 
-    }
-  });
-  return () => unsubscribe();
-}, []);
-  //////////
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const isFullyLoaded = !loading && homeLoaded;
 
   const clientProducts = products.filter(p => p.active && hasStock(p));
 
@@ -407,6 +398,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  
   return (
     <StoreContext.Provider value={{
       products, addProduct, deleteProduct, updateProduct, toggleActive, clientProducts,
@@ -416,8 +408,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       user, adminLogin, adminLogout, generateWhatsAppLink,
       searchQuery, setSearchQuery, carouselImages, updateCarouselImages,
       getAvailableStock, getEffectivePrice,
-      loading,
-      homeContent, updateHomeContent,
+      loading: !isFullyLoaded, 
+      homeContent,
+      updateHomeContent,
     }}>
       {children}
     </StoreContext.Provider>
