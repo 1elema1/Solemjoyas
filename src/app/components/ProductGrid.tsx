@@ -395,7 +395,7 @@ function ProductCard({ product }: { product: Product }) {
           <img
             src={hoverImg && hasSecondImage ? imgs[1] : imgs[0]}
             alt={product.name}
-            style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain', transition: 'opacity 0.35s', borderRadius: '8px' }}
+            style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain', transition: 'opacity 0.35s' }}
             className="transition-transform duration-700 group-hover:scale-105"
           />
 

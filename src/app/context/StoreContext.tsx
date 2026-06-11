@@ -198,7 +198,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const [loading, setLoading] = useState(true);
   const [homeContent, setHomeContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
- 
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -234,10 +233,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => { localStorage.setItem('solem_carousel', JSON.stringify(carouselImages)); }, [carouselImages]);
 
   // Sync homeContent from Firestore
-  
-
-  // Sync homeContent from Firestore
-   useEffect(() => {
+  useEffect(() => {
     const homeDocRef = doc(db, 'settings', 'homeContent');
     const unsubscribe = onSnapshot(
       homeDocRef,
@@ -248,8 +244,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setHomeContent(DEFAULT_HOME_CONTENT);
         }
       },
-    
-      },
       (error) => {
         console.error('Error al cargar contenido del home:', error);
         setHomeContent(DEFAULT_HOME_CONTENT);
@@ -257,8 +251,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     );
     return () => unsubscribe();
   }, []);
-
-  const isFullyLoaded = !loading && homeLoaded;
 
   const clientProducts = products.filter(p => p.active && hasStock(p));
 
@@ -399,7 +391,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  
   return (
     <StoreContext.Provider value={{
       products, addProduct, deleteProduct, updateProduct, toggleActive, clientProducts,
@@ -409,9 +400,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       user, adminLogin, adminLogout, generateWhatsAppLink,
       searchQuery, setSearchQuery, carouselImages, updateCarouselImages,
       getAvailableStock, getEffectivePrice,
-      loading: !isFullyLoaded, 
-      homeContent,
-      updateHomeContent,
+      loading,
+      homeContent, updateHomeContent,
     }}>
       {children}
     </StoreContext.Provider>
